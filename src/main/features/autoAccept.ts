@@ -22,12 +22,12 @@ export class AutoAccept {
   private async onPhase(phase: GameflowPhase | null): Promise<void> {
     if (phase !== 'ReadyCheck') return
 
-    if (!this.store.toggles.masterEnabled) {
-      this.log.info('ReadyCheck erkannt - Master-Toggle ist AUS, ignoriere.')
+    if (!this.store.settings.masterEnabled) {
+      this.log.info('Ready check - Draftpilot is paused, ignoring.')
       return
     }
-    if (!this.store.toggles.autoAccept) {
-      this.log.info('ReadyCheck erkannt - Auto-Accept ist AUS, ignoriere.')
+    if (!this.store.settings.autoAccept) {
+      this.log.info('Ready check - auto-accept is off, ignoring.')
       return
     }
 
@@ -36,11 +36,11 @@ export class AutoAccept {
 
     try {
       const { status } = await http.post(ACCEPT_PATH)
-      if (status >= 400) this.log.warn(`Ready-Check annehmen fehlgeschlagen (HTTP ${status}).`)
-      else this.log.event('Match angenommen.')
+      if (status >= 400) this.log.warn(`Accepting the ready check failed (HTTP ${status}).`)
+      else this.log.event('Match accepted.')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      this.log.error(`Accept fehlgeschlagen: ${msg}`)
+      this.log.error(`Accept failed: ${msg}`)
     }
   }
 }

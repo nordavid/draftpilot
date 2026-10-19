@@ -145,7 +145,7 @@ export class ChampSelectEngine {
     connector.on('connected', () => this.enqueue(() => this.fetchInitial()))
   }
 
-  /** Nach Aenderung von Toggles/Listen sofort neu bewerten (nicht erst beim naechsten Event). */
+  /** Nach Aenderung von Settings/Listen sofort neu bewerten (nicht erst beim naechsten Event). */
   refresh(): void {
     if (this.active) this.enqueue(() => this.evaluate())
   }
@@ -154,7 +154,7 @@ export class ChampSelectEngine {
     this.session = session
     if (!this.active) {
       this.active = true
-      this.log.event('Champ Select betreten.')
+      this.log.event('Entered champ select.')
       this.startTicking()
     }
     this.enqueue(() => this.evaluate())
@@ -174,12 +174,12 @@ export class ChampSelectEngine {
   private enqueue(fn: () => Promise<void>): void {
     this.chain = this.chain.then(fn).catch((err) => {
       const msg = err instanceof Error ? err.message : String(err)
-      this.log.error(`Engine-Fehler: ${msg}`)
+      this.log.error(`Engine error: ${msg}`)
     })
   }
 
   private enabled(type: ActionType): boolean {
-    const t = this.store.toggles
+    const t = this.store.settings
     return t.masterEnabled && (type === 'pick' ? t.autoPick : t.autoBan)
   }
 
@@ -267,12 +267,12 @@ export class ChampSelectEngine {
     const role = toRole(me?.assignedPosition)
     if (this.role !== role) {
       this.role = role
-      this.log.info(`Rolle: ${role === 'none' ? 'keine zugewiesen (Liste "Ohne Rolle")' : role}.`)
+      this.log.info(`Role: ${role === 'none' ? 'none assigned (using the "Blind" list)' : role}.`)
     }
     const prefs = this.store.roles[role]
 
     if (!this.findOwnAction(session, 'pick') && !this.announcedPassive) {
-      this.log.info('Keine eigene Pick-Action (z. B. ARAM) - Pick-Automatik bleibt passiv.')
+      this.log.info('No pick action of our own (e.g. ARAM) - auto-pick stays idle.')
       this.announcedPassive = true
     }
 
@@ -315,8 +315,8 @@ export class ChampSelectEngine {
     if (!t.manual && live > 0 && !t.writes.has(live)) {
       t.manual = true
       this.log.event(
-        `Manueller ${t.type === 'pick' ? 'Pick' : 'Ban'} erkannt (${this.label(live)}) - ` +
-          'Automatik fuer diese Champ Select pausiert.'
+        `Manual ${t.type} detected (${this.label(live)}) - ` +
+          'automation paused for this champ select.'
       )
     }
     if (t.manual) {
@@ -338,7 +338,7 @@ export class ChampSelectEngine {
     const what = t.type === 'pick' ? 'Pick' : 'Ban'
     if (target === null) {
       if (!t.loggedNone) {
-        this.log.warn(`${what}: kein Champion der Liste verfuegbar - nichts zu tun.`)
+        this.log.warn(`${what}: no champion from the list available - doing nothing.`)
         t.loggedNone = true
       }
       t.loggedTarget = null
@@ -346,7 +346,7 @@ export class ChampSelectEngine {
     }
     t.loggedNone = false
     if (t.loggedTarget !== target) {
-      this.log.event(`${what}-Ziel: ${this.label(target)}.`)
+      this.log.event(`${what} target: ${this.label(target)}.`)
       t.loggedTarget = target
     }
   }
@@ -354,7 +354,7 @@ export class ChampSelectEngine {
   private noteUnavailable(t: Track, id: number, reason: string): void {
     if (t.loggedUnavailable.has(id)) return
     t.loggedUnavailable.add(id)
-    this.log.info(`${t.type === 'pick' ? 'Pick' : 'Ban'}: ${this.label(id)} uebersprungen (${reason}).`)
+    this.log.info(`${t.type === 'pick' ? 'Pick' : 'Ban'}: skipping ${this.label(id)} (${reason}).`)
   }
 
   /** Schreibt einen Hover in die Action (merkt ihn als unseren, bevor das Echo eintrifft). */
@@ -365,13 +365,13 @@ export class ChampSelectEngine {
       await this.patchAction(action.id, { championId: target })
       // Lokalen Stand sofort nachziehen, damit der Lock nicht auf das Echo-Event wartet.
       action.championId = target
-      this.log.info(`${t.type === 'pick' ? 'Hover' : 'Ban-Hover'}: ${this.label(target)}.`)
+      this.log.info(`${t.type === 'pick' ? 'Hover' : 'Ban hover'}: ${this.label(target)}.`)
       t.lastError = null
       return true
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       if (t.lastError !== msg) {
-        this.log.warn(`Hover ${this.label(target)} fehlgeschlagen: ${msg}`)
+        this.log.warn(`Hovering ${this.label(target)} failed: ${msg}`)
         t.lastError = msg
       }
       return false
@@ -395,11 +395,11 @@ export class ChampSelectEngine {
       if (unavailable.has(c)) continue
       // Wer zuerst hovert, behaelt ihn: einen Champ, den wir schon halten, nicht abgeben.
       if (claims.has(c) && action.championId !== c) {
-        this.noteUnavailable(t, c, 'Teammate will ihn spielen')
+        this.noteUnavailable(t, c, 'a teammate wants to play it')
         continue
       }
       if (!pickable.has(c)) {
-        this.noteUnavailable(t, c, 'nicht pickbar - nicht im Besitz?')
+        this.noteUnavailable(t, c, 'not pickable - not owned?')
         continue
       }
       target = c
@@ -464,11 +464,11 @@ export class ChampSelectEngine {
     for (const c of list) {
       if (unavailable.has(c)) continue
       if (wanted.has(c)) {
-        this.noteUnavailable(t, c, 'Teammate oder du willst ihn spielen')
+        this.noteUnavailable(t, c, 'you or a teammate want to play it')
         continue
       }
       if (allyBanHovers.has(c) && action.championId !== c) {
-        this.noteUnavailable(t, c, 'Teammate bannt ihn bereits')
+        this.noteUnavailable(t, c, 'a teammate is already banning it')
         continue
       }
       if (bannable && !bannable.has(c)) continue
@@ -497,7 +497,7 @@ export class ChampSelectEngine {
   // --- Lock (Pick + Ban) ----------------------------------------------------
 
   private setActiveView(t: Track, target: number): void {
-    const { lockMode, lockThresholdMs } = this.store.toggles
+    const { lockMode, lockThresholdMs } = this.store.settings
     if (lockMode === 'hover-only') {
       t.setView('hover-only', target)
       return
@@ -509,7 +509,7 @@ export class ChampSelectEngine {
   /** Lockt/bannt das Ziel, sobald die (fortlaufend berechnete) Restzeit < Schwelle ist. */
   private async maybeLock(t: Track): Promise<void> {
     if (!this.enabled(t.type) || t.manual || t.locked) return
-    const { lockMode, lockThresholdMs } = this.store.toggles
+    const { lockMode, lockThresholdMs } = this.store.settings
     if (lockMode !== 'auto-lock') return
     const session = this.session
     const target = t.target
@@ -528,7 +528,7 @@ export class ChampSelectEngine {
       if (action.championId > 0 && !t.writes.has(action.championId)) {
         t.manual = true
         this.log.event(
-          `Anderer Champion gewaehlt (${this.label(action.championId)}) - Auto-Lock pausiert.`
+          `Different champion selected (${this.label(action.championId)}) - auto-lock paused.`
         )
         t.setView('manual', action.championId)
         this.publish()
@@ -540,8 +540,8 @@ export class ChampSelectEngine {
     try {
       await this.patchAction(action.id, { championId: target, completed: true })
       this.log.event(
-        `${t.type === 'pick' ? 'LOCK' : 'BAN'}: ${this.label(target)} bei ~` +
-          `${Math.max(0, Math.round(remainingMs))}ms Restzeit.`
+        `${t.type === 'pick' ? 'LOCK' : 'BAN'}: ${this.label(target)} with ~` +
+          `${Math.max(0, Math.round(remainingMs))}ms left.`
       )
       t.setView('done', target)
       this.publish()
@@ -549,7 +549,7 @@ export class ChampSelectEngine {
       t.locked = false
       const msg = err instanceof Error ? err.message : String(err)
       if (t.lastError !== msg) {
-        this.log.error(`${t.type === 'pick' ? 'Lock' : 'Ban'} fehlgeschlagen: ${msg}`)
+        this.log.error(`${t.type === 'pick' ? 'Lock' : 'Ban'} failed: ${msg}`)
         t.lastError = msg
       }
     }
@@ -560,7 +560,7 @@ export class ChampSelectEngine {
     body: { championId: number; completed?: boolean }
   ): Promise<void> {
     const http = this.connector.client
-    if (!http) throw new Error('kein LCU-Client')
+    if (!http) throw new Error('no LCU client')
     const { status } = await http.patch(`${ACTIONS_PATH}/${actionId}`, body)
     if (status >= 400) throw new Error(`HTTP ${status}`)
   }
@@ -589,7 +589,7 @@ export class ChampSelectEngine {
       clearInterval(this.tickTimer)
       this.tickTimer = null
     }
-    if (this.active) this.log.info('Champ Select beendet - Engine zurueckgesetzt.')
+    if (this.active) this.log.info('Champ select ended - engine reset.')
     this.active = false
     this.session = null
     this.role = null

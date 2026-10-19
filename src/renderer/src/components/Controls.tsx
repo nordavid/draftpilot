@@ -55,6 +55,8 @@ export function Stepper(props: {
   format: (v: number) => string
   onChange: (v: number) => void
   label: string
+  lessLabel: string
+  moreLabel: string
   disabled?: boolean
 }): React.JSX.Element {
   const { value, min, max, step } = props
@@ -62,7 +64,7 @@ export function Stepper(props: {
     <div className="stepper" aria-label={props.label} role="group">
       <button
         type="button"
-        aria-label="Weniger"
+        aria-label={props.lessLabel}
         disabled={props.disabled || value <= min}
         onClick={() => props.onChange(Math.max(min, value - step))}
       >
@@ -73,7 +75,7 @@ export function Stepper(props: {
       <output>{props.format(value)}</output>
       <button
         type="button"
-        aria-label="Mehr"
+        aria-label={props.moreLabel}
         disabled={props.disabled || value >= max}
         onClick={() => props.onChange(Math.min(max, value + step))}
       >

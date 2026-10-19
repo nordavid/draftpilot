@@ -43,7 +43,7 @@ export class LcuConnector extends EventEmitter {
   start(): void {
     if (this.running) return
     this.running = true
-    this.log.info('LCU-Connector gestartet - suche League-Client...')
+    this.log.info('LCU connector started - looking for the League client...')
     void this.loop()
   }
 
@@ -64,7 +64,7 @@ export class LcuConnector extends EventEmitter {
     const creds = await discoverCredentials()
     if (!creds) {
       if (!this.announcedSearching) {
-        this.log.warn('Kein League-Client gefunden - warte (Client offen?)...')
+        this.log.warn('No League client found - waiting (is it running?)...')
         this.announcedSearching = true
       }
       this.schedule(POLL_MS)
@@ -85,23 +85,23 @@ export class LcuConnector extends EventEmitter {
     }
 
     this.announcedSearching = false
-    this.log.info(`LCU verbunden (Port ${creds.port}, Quelle: ${creds.source}).`)
+    this.log.info(`LCU connected (port ${creds.port}, source: ${creds.source}).`)
     this.emit('connected', creds)
     // Initiale Phase als synthetisches Event, damit Watcher den Ist-Zustand kennen.
     this.emit('event', { uri: GAMEFLOW_PHASE_URI, eventType: 'Update', data: phase })
 
     const stream = new LcuEventStream(creds)
     this.stream = stream
-    stream.on('open', () => this.log.info('Event-Stream abonniert (OnJsonApiEvent).'))
+    stream.on('open', () => this.log.info('Event stream subscribed (OnJsonApiEvent).'))
     stream.on('event', (e) => this.emit('event', e))
-    stream.on('error', (err) => this.log.warn(`Event-Stream-Fehler: ${err.message}`))
+    stream.on('error', (err) => this.log.warn(`Event stream error: ${err.message}`))
     stream.on('close', () => this.handleDrop())
     stream.connect()
   }
 
   private handleDrop(): void {
     if (!this.running && !this.http) return
-    this.log.warn('LCU-Verbindung getrennt - versuche erneut zu verbinden...')
+    this.log.warn('LCU connection lost - reconnecting...')
     this.teardown()
     this.emit('disconnected')
     this.schedule(RECONNECT_MS)

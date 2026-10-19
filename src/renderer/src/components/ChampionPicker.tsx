@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Portrait, useChampions } from '../champions'
+import { useT } from '../i18n'
 
 // Auswahl-Sheet: Suche + Portrait-Raster. Enter nimmt den ersten Treffer, Esc schliesst.
 
@@ -7,7 +8,7 @@ function normalize(s: string): string {
   return s
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]/g, '')
 }
 
@@ -20,6 +21,7 @@ export function ChampionPicker(props: {
   onClose: () => void
 }): React.JSX.Element {
   const { catalog } = useChampions()
+  const t = useT()
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement | null>(null)
   const closeRef = useRef(props.onClose)
@@ -57,7 +59,7 @@ export function ChampionPicker(props: {
       >
         <div className="sheet-head">
           <h2>{props.title}</h2>
-          <button type="button" className="icon-btn" onClick={props.onClose} aria-label="Schliessen">
+          <button type="button" className="icon-btn" onClick={props.onClose} aria-label={t.close}>
             <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
               <path d="M2 2l8 8M10 2 2 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
@@ -66,7 +68,7 @@ export function ChampionPicker(props: {
         <input
           ref={inputRef}
           className="search"
-          placeholder="Champion suchen"
+          placeholder={t.search}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -74,12 +76,9 @@ export function ChampionPicker(props: {
           }}
         />
         {catalog.champions.length === 0 ? (
-          <p className="sheet-empty">
-            Champion-Liste wird geladen. Ohne Internet erscheint sie, sobald der League-Client
-            verbunden ist.
-          </p>
+          <p className="sheet-empty">{t.catalogLoading}</p>
         ) : results.length === 0 ? (
-          <p className="sheet-empty">Kein Champion passt zu &bdquo;{query}&ldquo;.</p>
+          <p className="sheet-empty">{t.noMatch(query)}</p>
         ) : (
           <div className="champ-grid">
             {results.map((c) => {
