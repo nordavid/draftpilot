@@ -1,5 +1,5 @@
-// Gemeinsam genutzte Typen & Konstanten fuer Main <-> Renderer (IPC-Vertrag).
-// Eine Quelle der Wahrheit fuer preload, Bruecke (main/ipc.ts) und GUI.
+// Typen & Konstanten des Frontends. Spiegeln das Rust-Modell (src-tauri/src/model.rs),
+// das per Tauri-Befehl/Event als JSON (camelCase) ankommt.
 
 export const APP_NAME = 'Draftpilot'
 
@@ -115,11 +115,11 @@ export interface LiveView {
   ban: ActionView | null
 }
 
-// --- GUI / IPC-Vertrag -------------------------------------------------------
+// --- GUI <-> Backend-Vertrag (Rust-Gegenstueck: src-tauri/src/model.rs) ------
 
 export type LcuStatus = 'searching' | 'connected'
 
-/** Vollstaendiger UI-Zustand, den der Main-Prozess an den Renderer pusht. */
+/** Vollstaendiger UI-Zustand, den das Backend an die GUI pusht. */
 export interface UiState {
   version: string
   lcu: LcuStatus
@@ -131,19 +131,7 @@ export interface UiState {
   live: LiveView | null
 }
 
-/** IPC-Channel-Namen (eine Quelle der Wahrheit fuer preload + bridge). */
-export const IPC = {
-  stateGet: 'state:get',
-  stateUpdate: 'state:update',
-  logsGet: 'logs:get',
-  logAppend: 'log:append',
-  settingsSet: 'settings:set',
-  roleSet: 'role:set',
-  championsGet: 'champions:get',
-  championsUpdate: 'champions:update'
-} as const
-
-/** Per contextBridge im Renderer als `window.api` verfuegbar. */
+/** Backend-Schnittstelle fuer die GUI (Tauri-Befehle + Events, siehe src/api.ts). */
 export interface DraftpilotApi {
   getState(): Promise<UiState>
   getLogs(): Promise<LogEntry[]>

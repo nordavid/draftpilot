@@ -1,0 +1,32 @@
+[package]
+name = "draftpilot"
+version = "2.0.0"
+description = "League of Legends champ select autopilot"
+authors = ["David Einenkel"]
+license = "MIT"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["sync", "time", "macros", "rt-multi-thread"] }
+# LCU (selbstsigniertes Zertifikat) + Data Dragon. native-tls = Windows SChannel, keine
+# eigene TLS-Implementierung im Binary.
+reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls"] }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+native-tls = "0.2"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+base64 = "0.22"
+sysinfo = { version = "0.33", default-features = false, features = ["system"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
