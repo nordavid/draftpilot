@@ -64,9 +64,15 @@ src/shared/index.ts  TS-Spiegel von model.rs
   Auswahl, Hover). Wer zuerst hovert, behält ihn (kein Ping-Pong).
 - **Pre-Hover** in `timer.phase === 'PLANNING'`; gelockt nur bei aktiver eigener Action.
 - **Ban-Ziel:** erster Champion der Rollen-Banliste, der nicht weg ist, den kein Teammate
-  und nicht wir selbst spielen wollen (inkl. aufgelöstem Pick-Ziel), den kein Teammate
-  schon zum Bannen hovert und der bannbar ist. Hover + Ban **nur in `BAN_PICK`**, nie in
-  PLANNING (dort ist die Ban-Action zwar `isInProgress`, ein Complete wäre wirkungslos).
+  und nicht wir selbst spielen wollen (inkl. aufgelöstem Pick-Ziel) und den kein Teammate
+  schon zum Bannen hovert. Hover + Ban **nur in `BAN_PICK`**, nie in PLANNING (dort ist die
+  Ban-Action zwar `isInProgress`, ein Complete wäre wirkungslos).
+- **Kein Filter über `bannable-champion-ids`** (v2.0.1): war im Live-Test leer und hat jeden
+  Ban verhindert. Der Client validiert; lehnt er einen Hover per HTTP-Fehler ab, kommt der
+  Champion in `Track.rejected` und der nächste ist dran. `pickable-champion-ids` bleibt
+  (Besitz), eine **leere** Liste gilt aber als „unbekannt" -> später erneut prüfen.
+- **Neubewertung ~1×/s auch ohne Event** (Events kommen unregelmäßig, im Solo-Custom gar
+  nicht). Der Timer rechnet deshalb ab Empfang des Events (`session_at`), nie ab Auswertung.
 - **Lock/Ban** kurz vor Ablauf (`lockThresholdMs`, 1–15 s, Default 3 s). Modus
   `hover-only` hovert nur.
 - **Nutzer hat Vorrang:** Die Engine merkt sich jeden selbst geschriebenen Champion
@@ -91,7 +97,9 @@ src/shared/index.ts  TS-Spiegel von model.rs
 ## Befehle
 
 - `npm run dev` — Tauri-Dev (Vite-HMR + Rust-Neustart)
-- `npm run build` — Release: `src-tauri/target/release/draftpilot.exe` (portabel) +
-  NSIS-Installer unter `src-tauri/target/release/bundle/nsis/`
+- `npm run release` — Release bauen und nach `dist/<version>/` kopieren (`Draftpilot.exe`
+  portabel + NSIS-Installer). Dem Nutzer immer diese Kopien geben: startet er die EXE direkt
+  aus `src-tauri/target/release`, ist sie gesperrt und der nächste Build scheitert.
+- `npm run build` — nur bauen (`src-tauri/target/release/...`)
 - `npm run typecheck` · `cargo test` (in `src-tauri/`) · `npm run vite:dev` (GUI mit Mock)
 - Rust/cargo liegt in `%USERPROFILE%\.cargo\bin` (in frischen Shells im PATH).
