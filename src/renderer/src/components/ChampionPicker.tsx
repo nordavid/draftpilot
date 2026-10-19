@@ -1,0 +1,106 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Portrait, useChampions } from '../champions'
+
+// Auswahl-Sheet: Suche + Portrait-Raster. Enter nimmt den ersten Treffer, Esc schliesst.
+
+function normalize(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+}
+
+export function ChampionPicker(props: {
+  title: string
+  kind: 'pick' | 'ban'
+  /** Champion-ID -> Grund, warum er nicht waehlbar ist (schon in einer Liste). */
+  blocked: Map<number, string>
+  onSelect: (id: number) => void
+  onClose: () => void
+}): React.JSX.Element {
+  const { catalog } = useChampions()
+  const [query, setQuery] = useState('')
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const closeRef = useRef(props.onClose)
+  closeRef.current = props.onClose
+
+  useEffect(() => {
+    inputRef.current?.focus()
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') closeRef.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const results = useMemo(() => {
+    const q = normalize(query)
+    if (!q) return catalog.champions
+    const starts = catalog.champions.filter((c) => normalize(c.name).startsWith(q))
+    const contains = catalog.champions.filter(
+      (c) => !normalize(c.name).startsWith(q) && normalize(c.name).includes(q)
+    )
+    return [...starts, ...contains]
+  }, [catalog, query])
+
+  const first = results.find((c) => !props.blocked.has(c.id))
+
+  return (
+    <div className="sheet-backdrop" onMouseDown={props.onClose}>
+      <div
+        className={`sheet sheet-${props.kind}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={props.title}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="sheet-head">
+          <h2>{props.title}</h2>
+          <button type="button" className="icon-btn" onClick={props.onClose} aria-label="Schliessen">
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
+              <path d="M2 2l8 8M10 2 2 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+        <input
+          ref={inputRef}
+          className="search"
+          placeholder="Champion suchen"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && first) props.onSelect(first.id)
+          }}
+        />
+        {catalog.champions.length === 0 ? (
+          <p className="sheet-empty">
+            Champion-Liste wird geladen. Ohne Internet erscheint sie, sobald der League-Client
+            verbunden ist.
+          </p>
+        ) : results.length === 0 ? (
+          <p className="sheet-empty">Kein Champion passt zu &bdquo;{query}&ldquo;.</p>
+        ) : (
+          <div className="champ-grid">
+            {results.map((c) => {
+              const reason = props.blocked.get(c.id)
+              return (
+                <button
+                  type="button"
+                  key={c.id}
+                  className={`champ ${c.id === first?.id && query ? 'is-first' : ''}`}
+                  disabled={!!reason}
+                  title={reason ?? c.name}
+                  onClick={() => props.onSelect(c.id)}
+                >
+                  <Portrait id={c.id} size={48} />
+                  <span>{c.name}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
