@@ -5,45 +5,55 @@
 Eigenständiges Desktop-Tool für League of Legends: pro Rolle geordnete Pick- und
 Ban-Listen (Erstwahl + Fallbacks), Auto-Accept, Hover + Auto-Lock kurz vor Timer-Ende.
 Ein **Master-Toggle** übersteuert alles. GUI-Sprache: **Englisch (Standard) oder Deutsch**,
-umschaltbar in den Einstellungen; Texte in `src/renderer/src/i18n.ts`. Logs sind immer Englisch.
+umschaltbar in den Einstellungen; Texte in `src/i18n.ts`. Logs sind immer Englisch.
 
-Unabhängig vom A2Z Companion (`../a2z-companion`); die LCU-Schicht wurde von dort
-**portiert, nicht geteilt** — bei Änderungen an `src/main/lcu/` daran denken, dass es
-Kopien gibt (Companion, league-control).
+Seit v2.0.0 **Tauri statt Electron** (Ziel: wenige MB statt ~100 MB). Die LCU-Logik stammt
+ursprünglich aus dem A2Z Companion (`../a2z-companion`, TypeScript) und wurde nach Rust
+**portiert** — bei LCU-Fixes dort/hier gegenseitig mitdenken (weitere Kopie: league-control).
 
 ## Tech-Stack
 
-- **Electron** + **electron-vite**, Renderer **Vite + React** (TypeScript).
-- **LCU nativ in Node, ohne `league-connect`:** `https` mit eigenem Agent
-  (`rejectUnauthorized: false`) für REST, `ws` für den WAMP-Event-Stream.
-- Champion-Daten von Riots **Data Dragon** (`ddragon.leagueoflegends.com`, en_US bzw. de_DE je
-  GUI-Sprache), bei jedem Start gegen die aktuelle Patch-Version abgeglichen und je Sprache in
-  `userData/champions-<locale>.json` gecacht; Fallback ohne Internet: LCU `champion-summary.json`.
+- **Tauri v2**: Rust-Backend (`src-tauri/`), GUI in **WebView2** (bei Win10/11 vorinstalliert).
+- **Frontend:** Vite + React 19 + TypeScript (`src/`). Spricht nur über `src/api.ts` mit dem
+  Backend (Tauri-Befehle `get_state`, `get_logs`, `get_champions`, `set_settings`,
+  `set_role` + Events `state`, `log`, `champions`). Im normalen Browser (`npm run vite:dev`)
+  läuft die GUI gegen Beispieldaten (`src/mockApi.ts`, URL-Parameter `?live=0&lang=de&paused=1`).
+- **LCU in Rust ohne Wrapper-Crate:** `reqwest` (native-tls, Zertifikatsprüfung aus nur für
+  127.0.0.1) für REST, `tokio-tungstenite` für den WAMP-Event-Stream, `sysinfo` für die
+  Prozess-Argumente von `LeagueClientUx.exe`.
+- Champion-Daten: Riot **Data Dragon** (en_US/de_DE je GUI-Sprache), bei jedem Start gegen
+  den aktuellen Patch abgeglichen, je Sprache gecacht; Fallback ohne Internet: LCU
+  `champion-summary.json` (ohne Icons).
 - Rollen-Icons: Original-Pfade aus `rcp-fe-lol-static-assets` (CommunityDragon) inline in
-  `RoleIcon.tsx`; „Fill" (Liste `none`/„Blind") nachgezeichnet, da dort nur als PNG.
-- Schrift: Barlow / Barlow Semi Condensed via `@fontsource` (gebündelt, offline).
-- Packaging: `electron-builder` -> `dist/<version>/`: NSIS-Installer + portable EXE, nur
-  en-US/de-Chromium-Locales. **Keine GitHub Actions anlegen.**
-- **`dist/` nie pauschal löschen:** Der Nutzer startet Builds teils direkt aus
-  `dist/<version>/win-unpacked`; laufende Instanz vorher prüfen.
+  `src/components/RoleIcon.tsx`; „Fill" (Liste `none`/„Blind") nachgezeichnet.
+- **Keine GitHub Actions anlegen.**
+
+## Optik
+
+League-Client-Vokabular, bewusst schlicht: Hextech-Navy (`#010a13`/`#0a1428`), dünne
+Goldrahmen (`#463714`/`#785a28`/`#c8aa6e`), eckige Formen, Marcellus (Versalien) nur für
+Wortmarke und Überschriften, sonst Segoe UI. Hextech-Blau `#0ac8b9` = läuft/live,
+Gold = Auswahl/Erstwahl, Rot `#e84057` = Ban. Eigene Titelleiste (`decorations: false`,
+`data-tauri-drag-region`, `WindowControls.tsx`).
 
 ## Struktur
 
 ```
-src/main/
-  index.ts                 Verdrahtung, Fenster (titleBarOverlay), Single-Instance
-  lcu/                     credentials, httpClient, eventStream, connector (Reconnect)
-  features/
-    gameflowWatcher.ts     Phasenwechsel
-    autoAccept.ts          ReadyCheck -> accept
-    summoner.ts            Riot-ID fuer die Anzeige
-    champSelectEngine.ts   Pick-/Ban-Automatik (Kern)
-  data/champions.ts        Champion-Katalog (Data Dragon / LCU)
-  settings.ts              Validierung + config.json (Flush beim Beenden in ipc.ts)
-  state/store.ts           Single Source of Truth (EventEmitter, touch())
-  ipc.ts / preload.ts      Bruecke zur GUI (window.api)
-src/shared/index.ts        IPC-Vertrag + Typen (Role, RolePrefs, Settings, LiveView ...)
-src/renderer/src/          React-GUI (App, PriorityRow, ChampionPicker, LivePanel, i18n)
+src-tauri/src/
+  main.rs        Einstieg (Release ohne Konsole)
+  app.rs         Tauri-Setup, Befehle, Tasks: Event-Router, Engine-Task (250-ms-Tick),
+                 GUI-Push (entprellt), Speichern (entprellt + Flush bei Exit), Auto-Accept,
+                 Summoner
+  lcu/           creds.rs (Lockfile/Prozess), client.rs (HTTPS), stream.rs (WAMP), mod.rs
+                 (Connector mit Reconnect, LcuHandle)
+  engine.rs      Pick-/Ban-Automatik (Kern) + Tests mit Fake-LCU
+  champions.rs   Champion-Katalog (Data Dragon / LCU)
+  settings.rs    Validierung + config.json
+  state.rs       Single Source of Truth (Store + Notify für GUI/Speichern)
+  model.rs       Datenmodell = JSON-Vertrag zum Frontend (camelCase)
+  log.rs         Ringpuffer + Event an die GUI
+src/             React-GUI (App, PriorityRow, ChampionPicker, LivePanel, i18n, api)
+src/shared/index.ts  TS-Spiegel von model.rs
 ```
 
 ## Champ-Select-Engine (Kernregeln)
@@ -57,26 +67,31 @@ src/renderer/src/          React-GUI (App, PriorityRow, ChampionPicker, LivePane
   und nicht wir selbst spielen wollen (inkl. aufgelöstem Pick-Ziel), den kein Teammate
   schon zum Bannen hovert und der bannbar ist. Hover + Ban **nur in `BAN_PICK`**, nie in
   PLANNING (dort ist die Ban-Action zwar `isInProgress`, ein Complete wäre wirkungslos).
-- **Lock/Ban** kurz vor Ablauf (`lockThresholdMs`, 1–15 s, Default 3 s), Timer-Tick 250 ms.
-  Modus `hover-only` hovert nur.
-- **Nutzer hat Vorrang:** Die Engine merkt sich jeden Champion, den sie selbst in eine
-  Action geschrieben hat (`Track.writes`). Steht dort ein anderer, war es der Nutzer ->
-  Automatik für diese Action in dieser Champ Select pausiert (`manual`). Vor dem Lock
-  wird zusätzlich geprüft, dass wirklich unser Ziel gehovert ist.
-- Alle LCU-Schreibzugriffe laufen serialisiert über eine Promise-Chain; jeder Call in
-  try/catch; im Zweifel nichts tun.
+- **Lock/Ban** kurz vor Ablauf (`lockThresholdMs`, 1–15 s, Default 3 s). Modus
+  `hover-only` hovert nur.
+- **Nutzer hat Vorrang:** Die Engine merkt sich jeden selbst geschriebenen Champion
+  (`Track.writes`). Steht dort ein anderer, war es der Nutzer -> Automatik für diese
+  Action in dieser Champ Select pausiert (`manual`). Vor dem Lock zusätzlich prüfen, dass
+  wirklich unser Ziel gehovert ist.
+- Die Engine läuft als **eine** Task (`&mut self`) -> LCU-Schreibzugriffe automatisch
+  serialisiert. Im Zweifel nichts tun.
 
 ## Konventionen
 
-- TypeScript überall, getrennte tsconfigs (Node / Web).
-- IPC-Verträge nur in `src/shared/index.ts`.
-- **Logs Englisch + ASCII-only** (Windows-Konsole -> Mojibake): `->` statt Pfeil.
-  GUI-Texte (i18n.ts) und Kommentare dürfen Umlaute haben.
-- Neue GUI-Texte immer in **beiden** Wörterbüchern (`en`, `de`) in `i18n.ts` anlegen;
-  `de` ist als `Dict` typisiert, fehlende Schlüssel fallen im Typecheck auf.
-- Dev-Start aus Claude-Tools: `ELECTRON_RUN_AS_NODE` vorher leeren
-  (`$env:ELECTRON_RUN_AS_NODE=$null; npm run dev`), sonst startet Electron als Node.
+- Rust-Modell (`model.rs`) und TS-Typen (`src/shared/index.ts`) immer gemeinsam ändern.
+- **Logs Englisch + ASCII-only** (Windows-Konsole). GUI-Texte (`i18n.ts`) und Kommentare
+  dürfen Umlaute haben; neue Texte immer in **beiden** Wörterbüchern (`de` ist als `Dict`
+  typisiert -> fehlende Schlüssel fallen im Typecheck auf).
+- Einstellungen: `%APPDATA%\Draftpilot\config.json` (gleiches Format wie die Electron-Version;
+  Schlüssel `toggles` aus v1.0.0 wird noch gelesen).
+- Engine-Änderungen mit einem Test in `engine.rs` absichern (`cargo test`).
+- Vite baut nach `web-dist/` (nicht `dist/`: dort liegen alte Electron-Builds, die der Nutzer
+  ggf. noch direkt startet). `dist/` nie pauschal löschen.
 
 ## Befehle
 
-- `npm run dev` · `npm run typecheck` · `npm run build` · `npm run build:win`
+- `npm run dev` — Tauri-Dev (Vite-HMR + Rust-Neustart)
+- `npm run build` — Release: `src-tauri/target/release/draftpilot.exe` (portabel) +
+  NSIS-Installer unter `src-tauri/target/release/bundle/nsis/`
+- `npm run typecheck` · `cargo test` (in `src-tauri/`) · `npm run vite:dev` (GUI mit Mock)
+- Rust/cargo liegt in `%USERPROFILE%\.cargo\bin` (in frischen Shells im PATH).

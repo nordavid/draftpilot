@@ -16,18 +16,26 @@ Englisch oder Deutsch.
   kannst. Alternativ „Nur hovern".
 - Ein Hauptschalter oben rechts pausiert alles.
 
+## Technik
+
+[Tauri v2](https://tauri.app): Backend in Rust, Oberfläche (React) im WebView2 von Windows.
+Dadurch ist die App nur wenige MB groß statt ~100 MB wie mit Electron.
+
 ## Entwickeln
+
+Voraussetzungen: Node.js, Rust (rustup, MSVC-Toolchain), Visual Studio C++ Build Tools.
 
 ```bash
 npm install
 npm run dev
 ```
 
-- `npm run typecheck` — TypeScript für Main und Renderer prüfen
-- `npm run build` — nach `out/` bauen
-- `npm run build:win` — nach `dist/<version>/`: Installer (`Draftpilot Setup <v>.exe`),
-  portable EXE (`Draftpilot <v> Portable.exe`) und entpackte App (`win-unpacked/`)
+- `npm run build` — Release-EXE (`src-tauri/target/release/draftpilot.exe`, läuft ohne
+  Installation) und Installer (`src-tauri/target/release/bundle/nsis/`)
+- `npm run typecheck` — TypeScript prüfen
+- `cargo test` (in `src-tauri/`) — Engine-Tests mit simulierten Champ Selects
+- `npm run vite:dev` — nur die Oberfläche im Browser, mit Beispieldaten
 
-Einstellungen und Listen landen in `%APPDATA%\Draftpilot\config.json` (gilt für Installer
-und portable Version gleichermaßen). Die Champion-Liste kommt von Riots Data Dragon, wird
-bei jedem Start gegen den aktuellen Patch abgeglichen und je Sprache daneben gecacht.
+Einstellungen und Listen landen in `%APPDATA%\Draftpilot\config.json`. Die Champion-Liste
+kommt von Riots Data Dragon, wird bei jedem Start gegen den aktuellen Patch abgeglichen und
+je Sprache daneben gecacht.
