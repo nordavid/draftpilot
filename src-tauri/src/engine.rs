@@ -25,13 +25,16 @@ use crate::model::{now_ms, ActionStatus, ActionView, LiveView, LockMode, Role, S
 use crate::state::Shared;
 
 const PICKABLE_PATH: &str = "/lol-champ-select/v1/pickable-champion-ids";
-const BANNABLE_PATH: &str = "/lol-champ-select/v1/bannable-champion-ids";
 const ACTIONS_PATH: &str = "/lol-champ-select/v1/session/actions";
 /// Draft-Declare-Phase: Pick-Absicht darf gehovert, aber nichts gelockt/gebannt werden.
 const PLANNING: &str = "PLANNING";
 /// Echte Ban-/Pick-Runde. In PLANNING ist die Ban-Action zwar schon "isInProgress",
 /// ein Complete waere dort aber wirkungslos -> Bans nur in dieser Phase.
 const BAN_PICK: &str = "BAN_PICK";
+/// Auch ohne neues Event regelmaessig neu bewerten: Session-Events kommen unregelmaessig
+/// (allein im Custom Game z. B. gar nicht mehr), und pickable-/bannable-Listen sind beim
+/// Phasenwechsel teils noch leer.
+const REEVALUATE_MS: i64 = 1000;
 
 // --- LCU-Zugriff (abstrahiert fuer Tests) -----------------------------------
 
@@ -250,6 +253,8 @@ struct Track {
     logged_none: bool,
     logged_unavailable: HashSet<i64>,
     last_error: Option<String>,
+    /// Champions, die der Client beim Hovern abgelehnt hat -> naechsten Kandidaten nehmen.
+    rejected: HashSet<i64>,
 }
 
 impl Track {
@@ -268,6 +273,7 @@ impl Track {
             logged_none: false,
             logged_unavailable: HashSet::new(),
             last_error: None,
+            rejected: HashSet::new(),
         }
     }
 
@@ -299,6 +305,9 @@ pub struct Engine<L: LcuApi> {
     name_of: NameFn,
     active: bool,
     session: Option<Session>,
+    /// Empfangszeit (epoch ms) der Session -> Basis fuer die Timer-Fortrechnung.
+    session_at: i64,
+    last_evaluation: i64,
     role: Option<Role>,
     pick: Track,
     ban: Track,
@@ -314,6 +323,8 @@ impl<L: LcuApi> Engine<L> {
             name_of,
             active: false,
             session: None,
+            session_at: 0,
+            last_evaluation: 0,
             role: None,
             pick: Track::new(Kind::Pick),
             ban: Track::new(Kind::Ban),
@@ -326,6 +337,7 @@ impl<L: LcuApi> Engine<L> {
         match data.as_ref().and_then(Session::parse) {
             Some(session) => {
                 self.session = Some(session);
+                self.session_at = now_ms();
                 if !self.active {
                     self.active = true;
                     self.log.event("Entered champ select.");
@@ -352,9 +364,14 @@ impl<L: LcuApi> Engine<L> {
         }
     }
 
-    /// Timer fortrechnen (Events feuern nicht kontinuierlich) -> ggf. locken/bannen.
+    /// Timer fortrechnen (Events feuern nicht kontinuierlich) -> ggf. locken/bannen;
+    /// etwa jede Sekunde komplett neu bewerten.
     pub async fn tick(&mut self) {
         if !self.active {
+            return;
+        }
+        if now_ms() - self.last_evaluation >= REEVALUATE_MS {
+            self.evaluate().await;
             return;
         }
         let mut pick = std::mem::replace(&mut self.pick, Track::new(Kind::Pick));
@@ -381,15 +398,20 @@ impl<L: LcuApi> Engine<L> {
         format!("{} ({id})", (self.name_of)(id))
     }
 
+    /// pickable-IDs. None = unbekannt (Fehler oder leere Liste: der Client fuellt sie beim
+    /// Phasenwechsel teils verspaetet).
     async fn fetch_ids(&self, path: &str) -> Option<HashSet<i64>> {
         match self.lcu.get_json(path).await {
-            Some((200, Value::Array(list))) => Some(list.iter().filter_map(Value::as_i64).collect()),
+            Some((200, Value::Array(list))) if !list.is_empty() => {
+                Some(list.iter().filter_map(Value::as_i64).collect())
+            }
             _ => None,
         }
     }
 
     async fn evaluate(&mut self) {
         let Some(session) = self.session.clone() else { return };
+        self.last_evaluation = now_ms();
 
         let position = session
             .my_team
@@ -515,6 +537,10 @@ impl<L: LcuApi> Engine<L> {
                 true
             }
             Err(err) => {
+                // Vom Client abgelehnt (HTTP-Fehler) -> diesen Champion ueberspringen.
+                if err.starts_with("HTTP ") {
+                    t.rejected.insert(target);
+                }
                 if t.last_error.as_deref() != Some(err.as_str()) {
                     self.log.warn(format!("Hovering {} failed: {err}", self.label(target)));
                     t.last_error = Some(err);
@@ -530,13 +556,18 @@ impl<L: LcuApi> Engine<L> {
         let Some(action) = self.prepare(session, t, list) else { return };
 
         // Verfuegbarkeit unklar -> im Zweifel nichts tun.
-        let Some(pickable) = self.fetch_ids(PICKABLE_PATH).await else { return };
+        let Some(pickable) = self.fetch_ids(PICKABLE_PATH).await else {
+            if t.view.is_none() {
+                t.set_view(ActionStatus::Waiting, None);
+            }
+            return;
+        };
 
         let unavailable = session.unavailable();
         let claims = session.teammate_claims();
         let mut target = None;
         for &c in list {
-            if unavailable.contains(&c) {
+            if unavailable.contains(&c) || t.rejected.contains(&c) {
                 continue;
             }
             // Wer zuerst hovert, behaelt ihn: einen Champ, den wir schon halten, nicht abgeben.
@@ -571,7 +602,7 @@ impl<L: LcuApi> Engine<L> {
             return;
         }
         t.time_left_ms = session.timer.adjusted_time_left_in_phase;
-        t.time_left_at = now_ms();
+        t.time_left_at = self.session_at;
         self.set_active_view(t, target);
         self.maybe_lock(t).await;
     }
@@ -597,12 +628,14 @@ impl<L: LcuApi> Engine<L> {
         if let Some(target) = self.pick.target {
             wanted.insert(target);
         }
+        // Bewusst KEIN Abgleich mit bannable-champion-ids: die Liste war im Test leer bzw.
+        // unvollstaendig und hat jeden Ban verhindert. Der Client prueft selbst; lehnt er ab,
+        // landet der Champion in `rejected` und der naechste der Liste ist dran.
         let ally_bans = session.ally_ban_hovers();
-        let bannable = self.fetch_ids(BANNABLE_PATH).await;
 
         let mut target = None;
         for &c in list {
-            if unavailable.contains(&c) {
+            if unavailable.contains(&c) || t.rejected.contains(&c) {
                 continue;
             }
             if wanted.contains(&c) {
@@ -612,9 +645,6 @@ impl<L: LcuApi> Engine<L> {
             // Keine Doppel-Bans: was ein Teammate schon hovert, ueberspringen (ausser wir waren zuerst).
             if ally_bans.contains(&c) && action.champion_id != c {
                 self.note_skipped(t, c, "a teammate is already banning it");
-                continue;
-            }
-            if bannable.as_ref().is_some_and(|b| !b.contains(&c)) {
                 continue;
             }
             target = Some(c);
@@ -635,7 +665,7 @@ impl<L: LcuApi> Engine<L> {
             return;
         }
         t.time_left_ms = session.timer.adjusted_time_left_in_phase;
-        t.time_left_at = now_ms();
+        t.time_left_at = self.session_at;
         self.set_active_view(t, target);
         self.maybe_lock(t).await;
     }
@@ -735,6 +765,8 @@ impl<L: LcuApi> Engine<L> {
         }
         self.active = false;
         self.session = None;
+        self.session_at = 0;
+        self.last_evaluation = 0;
         self.role = None;
         self.pick = Track::new(Kind::Pick);
         self.ban = Track::new(Kind::Ban);
@@ -765,20 +797,27 @@ mod tests {
     #[derive(Clone)]
     struct FakeLcu {
         session: Arc<Mutex<Session>>,
+        pickable: Arc<Mutex<Vec<i64>>>,
+        bannable: Arc<Mutex<Vec<i64>>>,
+        /// Champions, die der "Client" beim PATCH ablehnt (HTTP 500).
+        refuse: Arc<Mutex<Vec<i64>>>,
     }
 
     impl LcuApi for FakeLcu {
         async fn get_json(&self, path: &str) -> Option<(u16, Value)> {
             if path.ends_with("pickable-champion-ids") {
-                return Some((200, json!([AHRI, SYNDRA, ORI, LUX])));
+                return Some((200, json!(*self.pickable.lock().unwrap())));
             }
             if path.ends_with("bannable-champion-ids") {
-                return Some((200, json!([AHRI, SYNDRA, ORI, ZED, YASUO, YONE, LUX])));
+                return Some((200, json!(*self.bannable.lock().unwrap())));
             }
             Some((404, Value::Null))
         }
 
         async fn patch_action(&self, action_id: i64, champion_id: i64, completed: bool) -> Result<(), String> {
+            if self.refuse.lock().unwrap().contains(&champion_id) {
+                return Err("HTTP 500".into());
+            }
             let mut s = self.session.lock().unwrap();
             for a in s.actions.iter_mut().flatten() {
                 if a.id == action_id {
@@ -824,7 +863,12 @@ mod tests {
             let hub = LogHub::new();
             let shared = Shared::new(hub.clone(), "test".into());
             shared.store().roles.middle = RolePrefs { picks: vec![AHRI, SYNDRA, ORI], bans: vec![ZED, YASUO, YONE] };
-            let fake = FakeLcu { session: Arc::new(Mutex::new(session)) };
+            let fake = FakeLcu {
+                session: Arc::new(Mutex::new(session)),
+                pickable: Arc::new(Mutex::new(vec![AHRI, SYNDRA, ORI, LUX])),
+                bannable: Arc::new(Mutex::new(vec![AHRI, SYNDRA, ORI, ZED, YASUO, YONE, LUX])),
+                refuse: Arc::new(Mutex::new(Vec::new())),
+            };
             let engine = Engine::new(fake.clone(), shared.clone(), Logger::new(&hub, "test"), Arc::new(|id| id.to_string()));
             Harness { fake, shared, engine }
         }
@@ -992,6 +1036,70 @@ mod tests {
         assert_eq!(h.own("pick").champion_id, AHRI);
         assert!(!h.own("pick").completed);
         assert_eq!(h.live().unwrap().pick.unwrap().status, ActionStatus::HoverOnly);
+    }
+
+    /// Solo-Custom-Draft (Bug-Report v2.0.0): bannable-Liste leer, danach kommen keine Events
+    /// mehr. Trotzdem muss gehovert und rechtzeitig gebannt werden.
+    #[tokio::test]
+    async fn bans_without_bannable_list_and_without_further_events() {
+        let mut session = draft_session();
+        session.my_team.retain(|p| p.cell_id == ME);
+        session.actions[0].retain(|a| a.actor_cell_id == ME || a.actor_cell_id >= 5);
+        session.timer = Timer { adjusted_time_left_in_phase: 4100.0, phase: BAN_PICK.into() };
+        let mut h = Harness::new(session);
+        h.fake.bannable.lock().unwrap().clear();
+
+        h.emit().await;
+        assert_eq!(h.own("ban").champion_id, ZED, "hovered although bannable list is empty");
+        assert!(!h.own("ban").completed);
+
+        // Kein weiteres Event: nach > 1 s Neubewertung + fortgerechneter Timer -> Ban.
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+        h.engine.tick().await;
+        assert!(h.own("ban").completed, "banned via periodic re-evaluation");
+        assert_eq!(h.own("ban").champion_id, ZED);
+    }
+
+    /// Eine unvollstaendige bannable-Liste darf den Ban nicht verhindern.
+    #[tokio::test]
+    async fn ignores_incomplete_bannable_list() {
+        let mut h = Harness::new(draft_session());
+        *h.fake.bannable.lock().unwrap() = vec![AHRI];
+        h.edit(|s| s.timer = Timer { adjusted_time_left_in_phase: 20000.0, phase: BAN_PICK.into() });
+        h.emit().await;
+        assert_eq!(h.own("ban").champion_id, ZED);
+    }
+
+    /// pickable-Liste zu Beginn der eigenen Runde leer -> spaeter ohne Event nachholen.
+    #[tokio::test]
+    async fn picks_once_pickable_list_arrives_late() {
+        let mut h = Harness::new(draft_session());
+        h.end_bans();
+        h.edit(|s| {
+            s.actions[3][0].is_in_progress = true;
+            s.timer = Timer { adjusted_time_left_in_phase: 30000.0, phase: BAN_PICK.into() };
+        });
+        h.fake.pickable.lock().unwrap().clear();
+        h.emit().await;
+        assert_eq!(h.own("pick").champion_id, 0, "nothing hovered while pickable is unknown");
+
+        *h.fake.pickable.lock().unwrap() = vec![AHRI, SYNDRA];
+        tokio::time::sleep(Duration::from_millis(1100)).await;
+        h.engine.tick().await;
+        assert_eq!(h.own("pick").champion_id, AHRI);
+        assert!(!h.own("pick").completed, "timer must not be reset by re-evaluation");
+    }
+
+    /// Lehnt der Client einen Ban ab, wird der naechste Kandidat genommen.
+    #[tokio::test]
+    async fn falls_back_when_client_refuses_a_champion() {
+        let mut h = Harness::new(draft_session());
+        h.fake.refuse.lock().unwrap().push(ZED);
+        h.edit(|s| s.timer = Timer { adjusted_time_left_in_phase: 20000.0, phase: BAN_PICK.into() });
+        h.emit().await;
+        assert_eq!(h.own("ban").champion_id, 0);
+        h.emit().await;
+        assert_eq!(h.own("ban").champion_id, YASUO);
     }
 
     #[test]

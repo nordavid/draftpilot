@@ -1,7 +1,7 @@
 {
   "name": "draftpilot",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "League of Legends champ select autopilot: role-based picks & bans, auto-accept (LCU).",
   "author": "David Einenkel",
   "license": "MIT",
@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
+    "release": "tauri build && node scripts/copy-release.mjs",
     "vite:dev": "vite",
     "vite:build": "vite build",
     "typecheck": "tsc --noEmit",
