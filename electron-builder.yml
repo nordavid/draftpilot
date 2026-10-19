@@ -1,0 +1,32 @@
+appId: de.nordavid.draftpilot
+productName: Draftpilot
+copyright: Copyright (c) 2026 David Einenkel
+
+directories:
+  output: dist
+  buildResources: build
+
+# Alles ausser Quell-/Config-Dateien einpacken. out/ (Build-Output), package.json
+# und die Produktions-Dependencies (ws) sind dadurch enthalten.
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.gitignore,.editorconfig,.prettierrc}'
+  - '!{.env,.env.*,.npmrc}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{CLAUDE.md,README.md}'
+
+win:
+  target:
+    - nsis
+  icon: build/icon.ico
+  # Kein Code-Signing-Zertifikat -> unsignierter Installer (SmartScreen warnt einmalig).
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Draftpilot
