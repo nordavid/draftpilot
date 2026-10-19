@@ -35,7 +35,7 @@ export class GameflowWatcher extends EventEmitter {
 
     const previous = this.current
     this.current = phase
-    this.log.event(`Gameflow-Phase: ${previous ?? '-'} -> ${phase}`)
+    this.log.event(`Gameflow phase: ${previous ?? '-'} -> ${phase}`)
     this.emit('phase', phase, previous)
   }
 }

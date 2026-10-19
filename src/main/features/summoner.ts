@@ -65,7 +65,7 @@ export class SummonerWatcher {
       const tagLine = data?.tagLine || ''
       this.store.summonerRiotId = tagLine ? `${gameName}#${tagLine}` : gameName
       this.store.touch()
-      this.log.info(`Eingeloggt als ${this.store.summonerRiotId}.`)
+      this.log.info(`Logged in as ${this.store.summonerRiotId}.`)
     } catch {
       this.scheduleRetry()
     }

@@ -3,7 +3,8 @@ productName: Draftpilot
 copyright: Copyright (c) 2026 David Einenkel
 
 directories:
-  output: dist
+  # Je Version ein eigener Ordner: eine laufende aeltere Version blockiert den Build nicht.
+  output: dist/${version}
   buildResources: build
 
 # Alles ausser Quell-/Config-Dateien einpacken. out/ (Build-Output), package.json
@@ -17,11 +18,21 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - '!{CLAUDE.md,README.md}'
 
+# Nur die Chromium-Sprachpakete der App-Sprachen mitliefern (spart ~40 MB entpackt).
+electronLanguages:
+  - en-US
+  - de
+
 win:
+  # Installer + portable EXE (ohne Installation, entpackt sich bei jedem Start).
   target:
     - nsis
+    - portable
   icon: build/icon.ico
-  # Kein Code-Signing-Zertifikat -> unsignierter Installer (SmartScreen warnt einmalig).
+  # Kein Code-Signing-Zertifikat -> unsignierte EXEs (SmartScreen warnt einmalig).
+
+portable:
+  artifactName: ${productName} ${version} Portable.exe
 
 nsis:
   oneClick: false

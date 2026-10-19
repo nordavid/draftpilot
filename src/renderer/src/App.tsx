@@ -1,41 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   APP_NAME,
+  LANGUAGES,
   LOCK_THRESHOLD_MAX_MS,
   LOCK_THRESHOLD_MIN_MS,
   MAX_LIST,
   ROLES,
-  ROLE_LABEL,
-  type GameflowPhase,
   type LogEntry,
   type Role,
   type RolePrefs,
-  type Toggles,
+  type Settings,
   type UiState
 } from '@shared/index'
 import { ChampionsContext, buildLookup, type ChampionLookup } from './champions'
+import { DICTS, I18nContext, LANGUAGE_NAME } from './i18n'
 import { RoleIcon } from './components/RoleIcon'
 import { PriorityRow } from './components/PriorityRow'
 import { ChampionPicker } from './components/ChampionPicker'
 import { LivePanel } from './components/LivePanel'
 import { Segmented, Stepper, Switch } from './components/Controls'
-
-const PHASE_LABEL: Record<GameflowPhase, string> = {
-  None: 'Hauptmenü',
-  Lobby: 'Lobby',
-  Matchmaking: 'Suche Match',
-  CheckedIntoTournament: 'Clash eingecheckt',
-  ReadyCheck: 'Match gefunden',
-  ChampSelect: 'Champ Select',
-  GameStart: 'Spiel startet',
-  FailedToLaunch: 'Start fehlgeschlagen',
-  InProgress: 'Im Spiel',
-  Reconnect: 'Reconnect',
-  WaitingForStats: 'Warte auf Statistiken',
-  PreEndOfGame: 'Spielende',
-  EndOfGame: 'Spielende',
-  TerminatedInError: 'Spiel abgebrochen'
-}
 
 const TAB_KEY = 'draftpilot.tab'
 
@@ -68,6 +51,7 @@ function App(): React.JSX.Element {
   const [showLog, setShowLog] = useState(false)
   const logRef = useRef<HTMLDivElement | null>(null)
   const liveRole = ui?.live?.role ?? null
+  const t = DICTS[ui?.settings.language ?? 'en']
 
   useEffect(() => {
     void window.api.getState().then(setUi)
@@ -95,6 +79,10 @@ function App(): React.JSX.Element {
   }, [tab])
 
   useEffect(() => {
+    document.documentElement.lang = t.locale.slice(0, 2)
+  }, [t])
+
+  useEffect(() => {
     const el = logRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [logs, showLog])
@@ -103,20 +91,20 @@ function App(): React.JSX.Element {
     const map = new Map<number, string>()
     if (!ui || !picker) return map
     const prefs = ui.roles[picker.role]
-    for (const id of prefs.picks) map.set(id, 'Schon in deinen Picks')
-    for (const id of prefs.bans) map.set(id, 'Schon in deinen Bans')
+    for (const id of prefs.picks) map.set(id, t.inPicks)
+    for (const id of prefs.bans) map.set(id, t.inBans)
     return map
-  }, [ui, picker])
+  }, [ui, picker, t])
 
-  if (!ui) return <div className="boot">Draftpilot startet</div>
+  if (!ui) return <div className="boot">{t.boot}</div>
 
-  const t = ui.toggles
-  const paused = !t.masterEnabled
+  const s = ui.settings
+  const paused = !s.masterEnabled
   const prefs = ui.roles[tab]
 
-  const setToggles = (partial: Partial<Toggles>): void => {
-    setUi({ ...ui, toggles: { ...t, ...partial } })
-    void window.api.setToggles(partial).then(setUi)
+  const setSettings = (partial: Partial<Settings>): void => {
+    setUi({ ...ui, settings: { ...s, ...partial } })
+    void window.api.setSettings(partial).then(setUi)
   }
   const setRole = (role: Role, next: RolePrefs): void => {
     setUi({ ...ui, roles: { ...ui.roles, [role]: next } })
@@ -138,210 +126,209 @@ function App(): React.JSX.Element {
   const connected = ui.lcu === 'connected'
 
   return (
-    <ChampionsContext.Provider value={champs}>
-      <div className={`app ${paused ? 'is-paused' : ''}`}>
-        <header className="titlebar">
-          <div className="brand">
-            <Logo />
-            <span className="brand-name">{APP_NAME}</span>
-            <span className="brand-version">{ui.version}</span>
-          </div>
-          <label className={`master ${t.masterEnabled ? 'is-on' : ''}`}>
-            <span>{t.masterEnabled ? 'Aktiv' : 'Pausiert'}</span>
-            <Switch
-              checked={t.masterEnabled}
-              onChange={(v) => setToggles({ masterEnabled: v })}
-              label="Draftpilot aktiv"
-            />
-          </label>
-        </header>
-
-        <main className="content">
-          <div className="status">
-            <span className={`status-conn ${connected ? 'is-ok' : 'is-wait'}`}>
-              <span className="dot" aria-hidden />
-              {connected ? 'Mit League verbunden' : 'Warte auf League-Client'}
-            </span>
-            {connected && ui.phase && <span className="status-phase">{PHASE_LABEL[ui.phase]}</span>}
-            {ui.summonerRiotId && <span className="status-summoner">{ui.summonerRiotId}</span>}
-          </div>
-
-          {paused && (
-            <p className="paused-note">
-              Pausiert. Draftpilot nimmt keine Matches an und pickt oder bannt nichts.
-            </p>
-          )}
-
-          {ui.live && <LivePanel live={ui.live} />}
-
-          <section className="roles" aria-label="Champions pro Rolle">
-            <div className="role-tabs" role="tablist">
-              {ROLES.map((r) => {
-                const p = ui.roles[r]
-                const configured = p.picks.length + p.bans.length > 0
-                return (
-                  <button
-                    type="button"
-                    role="tab"
-                    key={r}
-                    aria-selected={tab === r}
-                    className={`role-tab ${tab === r ? 'is-active' : ''} ${liveRole === r ? 'is-live' : ''}`}
-                    onClick={() => setTab(r)}
-                    title={liveRole === r ? `${ROLE_LABEL[r]} (aktuelle Champ Select)` : ROLE_LABEL[r]}
-                  >
-                    <RoleIcon role={r} size={20} />
-                    <span>{r === 'none' ? 'Ohne' : ROLE_LABEL[r]}</span>
-                    {configured && <span className="role-mark" aria-hidden />}
-                  </button>
-                )
-              })}
+    <I18nContext.Provider value={t}>
+      <ChampionsContext.Provider value={champs}>
+        <div className={`app ${paused ? 'is-paused' : ''}`}>
+          <header className="titlebar">
+            <div className="brand">
+              <Logo />
+              <span className="brand-name">{APP_NAME}</span>
+              <span className="brand-version">{ui.version}</span>
             </div>
-
-            <div className="role-body" role="tabpanel">
-              {tab === 'none' && (
-                <p className="role-note">
-                  Gilt, wenn der Client keine Rolle zuweist, z. B. im Blind Pick.
-                </p>
-              )}
-
-              <div className="list-block">
-                <div className="list-head">
-                  <h2>Picks</h2>
-                  <span className="list-help">
-                    Ist deine Erstwahl gebannt, weg oder nicht im Besitz, kommt der nächste dran.
-                  </span>
-                </div>
-                <PriorityRow
-                  kind="pick"
-                  ids={prefs.picks}
-                  onChange={(picks) => setRole(tab, { ...prefs, picks })}
-                  onAdd={() => setPicker({ role: tab, kind: 'pick' })}
-                />
-              </div>
-
-              <div className="list-block">
-                <div className="list-head">
-                  <h2>Bans</h2>
-                  <span className="list-help">
-                    Champions, die ein Teammate spielen will, werden übersprungen.
-                  </span>
-                </div>
-                <PriorityRow
-                  kind="ban"
-                  ids={prefs.bans}
-                  onChange={(bans) => setRole(tab, { ...prefs, bans })}
-                  onAdd={() => setPicker({ role: tab, kind: 'ban' })}
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="settings" aria-label="Automatik">
-            <div className="setting">
-              <div className="setting-text">
-                <span>Match automatisch annehmen</span>
-              </div>
+            <label className={`master ${s.masterEnabled ? 'is-on' : ''}`}>
+              <span>{s.masterEnabled ? t.active : t.paused}</span>
               <Switch
-                checked={t.autoAccept}
-                onChange={(v) => setToggles({ autoAccept: v })}
-                label="Match automatisch annehmen"
+                checked={s.masterEnabled}
+                onChange={(v) => setSettings({ masterEnabled: v })}
+                label={t.masterLabel}
               />
-            </div>
-            <div className="setting">
-              <div className="setting-text">
-                <span>Champion automatisch picken</span>
-                <small>Wählst du selbst einen Champion, hält sich Draftpilot raus.</small>
-              </div>
-              <Switch
-                checked={t.autoPick}
-                onChange={(v) => setToggles({ autoPick: v })}
-                label="Champion automatisch picken"
-              />
-            </div>
-            <div className="setting">
-              <div className="setting-text">
-                <span>Champion automatisch bannen</span>
-              </div>
-              <Switch
-                checked={t.autoBan}
-                onChange={(v) => setToggles({ autoBan: v })}
-                label="Champion automatisch bannen"
-              />
-            </div>
-            <div className="setting">
-              <div className="setting-text">
-                <span>Bestätigen</span>
-                <small>
-                  {t.lockMode === 'auto-lock'
-                    ? 'Hovert sofort und lockt kurz vor Ablauf, damit du noch umentscheiden kannst.'
-                    : 'Hovert nur, den Lock-In klickst du selbst.'}
-                </small>
-              </div>
-              <Segmented
-                label="Bestätigen"
-                value={t.lockMode}
-                options={[
-                  { value: 'auto-lock', label: 'Automatisch' },
-                  { value: 'hover-only', label: 'Nur hovern' }
-                ]}
-                onChange={(v) => setToggles({ lockMode: v })}
-              />
-            </div>
-            <div className="setting">
-              <div className="setting-text">
-                <span>Lock-Zeitpunkt</span>
-                <small>Sekunden vor Ablauf des Timers</small>
-              </div>
-              <Stepper
-                label="Lock-Zeitpunkt"
-                value={t.lockThresholdMs}
-                min={LOCK_THRESHOLD_MIN_MS}
-                max={LOCK_THRESHOLD_MAX_MS}
-                step={1000}
-                format={(v) => `${Math.round(v / 1000)} s`}
-                onChange={(v) => setToggles({ lockThresholdMs: v })}
-                disabled={t.lockMode !== 'auto-lock'}
-              />
-            </div>
-          </section>
+            </label>
+          </header>
 
-          <section className="log">
-            <button
-              type="button"
-              className="log-toggle"
-              aria-expanded={showLog}
-              onClick={() => setShowLog((v) => !v)}
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
-                <path d="M3 2l3.5 3L3 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-              </svg>
-              Protokoll
-            </button>
-            {showLog && (
-              <div className="log-list" ref={logRef}>
-                {logs.length === 0 && <div className="log-line">Noch keine Einträge.</div>}
-                {logs.map((l, i) => (
-                  <div key={i} className={`log-line lv-${l.level}`}>
-                    <time>{fmtTime(l.ts)}</time>
-                    <span>{l.message}</span>
+          <main className="content">
+            <div className="status">
+              <span className={`status-conn ${connected ? 'is-ok' : 'is-wait'}`}>
+                <span className="dot" aria-hidden />
+                {connected ? t.connected : t.waiting}
+              </span>
+              {connected && ui.phase && <span className="status-phase">{t.phase[ui.phase]}</span>}
+              {ui.summonerRiotId && <span className="status-summoner">{ui.summonerRiotId}</span>}
+            </div>
+
+            {paused && <p className="paused-note">{t.pausedNote}</p>}
+
+            {ui.live && <LivePanel live={ui.live} />}
+
+            <section className="roles" aria-label={t.rolesLabel}>
+              <div className="role-tabs" role="tablist">
+                {ROLES.map((r) => {
+                  const p = ui.roles[r]
+                  const configured = p.picks.length + p.bans.length > 0
+                  return (
+                    <button
+                      type="button"
+                      role="tab"
+                      key={r}
+                      aria-selected={tab === r}
+                      className={`role-tab ${tab === r ? 'is-active' : ''} ${liveRole === r ? 'is-live' : ''}`}
+                      onClick={() => setTab(r)}
+                      title={liveRole === r ? `${t.role[r]} ${t.liveRoleSuffix}` : t.role[r]}
+                    >
+                      <RoleIcon role={r} size={22} />
+                      <span>{t.role[r]}</span>
+                      {configured && <span className="role-mark" aria-hidden />}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="role-body" role="tabpanel">
+                {tab === 'none' && <p className="role-note">{t.noneNote}</p>}
+
+                <div className="list-block">
+                  <div className="list-head">
+                    <h2>{t.picks}</h2>
+                    <span className="list-help">{t.picksHelp}</span>
                   </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </main>
+                  <PriorityRow
+                    kind="pick"
+                    ids={prefs.picks}
+                    onChange={(picks) => setRole(tab, { ...prefs, picks })}
+                    onAdd={() => setPicker({ role: tab, kind: 'pick' })}
+                  />
+                </div>
 
-        {picker && (
-          <ChampionPicker
-            kind={picker.kind}
-            title={`${picker.kind === 'pick' ? 'Pick' : 'Ban'} für ${ROLE_LABEL[picker.role]} hinzufügen`}
-            blocked={blocked}
-            onSelect={addChampion}
-            onClose={() => setPicker(null)}
-          />
-        )}
-      </div>
-    </ChampionsContext.Provider>
+                <div className="list-block">
+                  <div className="list-head">
+                    <h2>{t.bans}</h2>
+                    <span className="list-help">{t.bansHelp}</span>
+                  </div>
+                  <PriorityRow
+                    kind="ban"
+                    ids={prefs.bans}
+                    onChange={(bans) => setRole(tab, { ...prefs, bans })}
+                    onAdd={() => setPicker({ role: tab, kind: 'ban' })}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="settings">
+              <div className="setting">
+                <div className="setting-text">
+                  <span>{t.autoAccept}</span>
+                </div>
+                <Switch
+                  checked={s.autoAccept}
+                  onChange={(v) => setSettings({ autoAccept: v })}
+                  label={t.autoAccept}
+                />
+              </div>
+              <div className="setting">
+                <div className="setting-text">
+                  <span>{t.autoPick}</span>
+                  <small>{t.autoPickHint}</small>
+                </div>
+                <Switch
+                  checked={s.autoPick}
+                  onChange={(v) => setSettings({ autoPick: v })}
+                  label={t.autoPick}
+                />
+              </div>
+              <div className="setting">
+                <div className="setting-text">
+                  <span>{t.autoBan}</span>
+                </div>
+                <Switch
+                  checked={s.autoBan}
+                  onChange={(v) => setSettings({ autoBan: v })}
+                  label={t.autoBan}
+                />
+              </div>
+              <div className="setting">
+                <div className="setting-text">
+                  <span>{t.confirm}</span>
+                  <small>{s.lockMode === 'auto-lock' ? t.confirmAuto : t.confirmHover}</small>
+                </div>
+                <Segmented
+                  label={t.confirm}
+                  value={s.lockMode}
+                  options={[
+                    { value: 'auto-lock', label: t.confirmAutoOption },
+                    { value: 'hover-only', label: t.confirmHoverOption }
+                  ]}
+                  onChange={(v) => setSettings({ lockMode: v })}
+                />
+              </div>
+              <div className="setting">
+                <div className="setting-text">
+                  <span>{t.lockTime}</span>
+                  <small>{t.lockTimeHint}</small>
+                </div>
+                <Stepper
+                  label={t.lockTime}
+                  lessLabel={t.less}
+                  moreLabel={t.more}
+                  value={s.lockThresholdMs}
+                  min={LOCK_THRESHOLD_MIN_MS}
+                  max={LOCK_THRESHOLD_MAX_MS}
+                  step={1000}
+                  format={(v) => `${Math.round(v / 1000)} s`}
+                  onChange={(v) => setSettings({ lockThresholdMs: v })}
+                  disabled={s.lockMode !== 'auto-lock'}
+                />
+              </div>
+              <div className="setting">
+                <div className="setting-text">
+                  <span>{t.language}</span>
+                </div>
+                <Segmented
+                  label={t.language}
+                  value={s.language}
+                  options={LANGUAGES.map((l) => ({ value: l, label: LANGUAGE_NAME[l] }))}
+                  onChange={(v) => setSettings({ language: v })}
+                />
+              </div>
+            </section>
+
+            <section className="log">
+              <button
+                type="button"
+                className="log-toggle"
+                aria-expanded={showLog}
+                onClick={() => setShowLog((v) => !v)}
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+                  <path d="M3 2l3.5 3L3 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+                {t.log}
+              </button>
+              {showLog && (
+                <div className="log-list" ref={logRef}>
+                  {logs.length === 0 && <div className="log-line">{t.logEmpty}</div>}
+                  {logs.map((l, i) => (
+                    <div key={i} className={`log-line lv-${l.level}`}>
+                      <time>{fmtTime(l.ts)}</time>
+                      <span>{l.message}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </main>
+
+          {picker && (
+            <ChampionPicker
+              kind={picker.kind}
+              title={t.addTitle(picker.kind === 'pick' ? t.pick : t.ban, t.role[picker.role])}
+              blocked={blocked}
+              onSelect={addChampion}
+              onClose={() => setPicker(null)}
+            />
+          )}
+        </div>
+      </ChampionsContext.Provider>
+    </I18nContext.Provider>
   )
 }
 

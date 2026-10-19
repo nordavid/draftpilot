@@ -2,15 +2,14 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import {
   IPC,
   ROLES,
-  ROLE_LABEL,
   type LogEntry,
   type Role,
   type RolePrefs,
-  type Toggles,
+  type Settings,
   type UiState
 } from '@shared/index'
 import { getLogHistory, setLogSink, type Logger } from './logger'
-import { applyToggles, sanitizeRolePrefs, save } from './settings'
+import { applySettings, sanitizeRolePrefs, save } from './settings'
 import type { Store } from './state/store'
 import type { ChampionData } from './data/champions'
 import type { ChampSelectEngine } from './features/champSelectEngine'
@@ -24,7 +23,7 @@ function buildState(store: Store): UiState {
     lcu: store.lcuStatus,
     phase: store.phase,
     summonerRiotId: store.summonerRiotId,
-    toggles: { ...store.toggles },
+    settings: { ...store.settings },
     roles: structuredClone(store.roles),
     live: store.live
   }
@@ -63,13 +62,24 @@ export function setupIpc(
     }
   })
 
+  // Beim Beenden ausstehende Aenderungen sofort schreiben (sonst gingen die letzten
+  // ~500 ms nach einer Aenderung verloren).
+  app.on('before-quit', () => {
+    if (!persistTimer) return
+    clearTimeout(persistTimer)
+    persistTimer = null
+    save(store)
+  })
+
   ipcMain.handle(IPC.stateGet, () => buildState(store))
   ipcMain.handle(IPC.logsGet, () => getLogHistory())
   ipcMain.handle(IPC.championsGet, () => champions.get())
 
-  ipcMain.handle(IPC.togglesSet, (_e, partial: Partial<Toggles>) => {
-    applyToggles(store.toggles, partial ?? {})
-    log.info(`Einstellung geaendert: ${JSON.stringify(partial)}`)
+  ipcMain.handle(IPC.settingsSet, (_e, partial: Partial<Settings>) => {
+    const languageBefore = store.settings.language
+    applySettings(store.settings, partial ?? {})
+    log.info(`Setting changed: ${JSON.stringify(partial)}`)
+    if (store.settings.language !== languageBefore) champions.setLanguage(store.settings.language)
     store.touch()
     engine.refresh()
     return buildState(store)
@@ -80,8 +90,8 @@ export function setupIpc(
     store.roles[role] = sanitizeRolePrefs(prefs)
     const fmt = (ids: number[]): string => ids.map((id) => champions.name(id)).join(', ') || '-'
     log.info(
-      `${ROLE_LABEL[role]}: Picks [${fmt(store.roles[role].picks)}], ` +
-        `Bans [${fmt(store.roles[role].bans)}]`
+      `Role ${role}: picks [${fmt(store.roles[role].picks)}], ` +
+        `bans [${fmt(store.roles[role].bans)}]`
     )
     store.touch()
     engine.refresh()

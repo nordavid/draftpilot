@@ -5,10 +5,10 @@ import {
   type LcuStatus,
   type LiveView,
   type RolePrefsMap,
-  type Toggles
+  type Settings
 } from '@shared/index'
 
-// Zentraler Laufzeit-Zustand: Quelle der Wahrheit fuer Toggles, Rollen-Listen,
+// Zentraler Laufzeit-Zustand: Quelle der Wahrheit fuer Settings, Rollen-Listen,
 // Verbindungsstatus und den Live-Stand der Champ Select. Mutationen rufen `touch()`;
 // die GUI-Bruecke pusht daraufhin (debounced) einen Snapshot und persistiert.
 
@@ -24,7 +24,8 @@ export class Store extends EventEmitter {
   summonerRiotId: string | null = null
   live: LiveView | null = null
 
-  readonly toggles: Toggles = {
+  readonly settings: Settings = {
+    language: 'en',
     masterEnabled: true,
     autoAccept: true,
     autoPick: true,

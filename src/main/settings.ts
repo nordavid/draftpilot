@@ -2,12 +2,13 @@ import { join } from 'node:path'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { app } from 'electron'
 import {
+  LANGUAGES,
   LOCK_THRESHOLD_MAX_MS,
   LOCK_THRESHOLD_MIN_MS,
   MAX_LIST,
   ROLES,
   type RolePrefs,
-  type Toggles
+  type Settings
 } from '@shared/index'
 import type { Logger } from './logger'
 import type { Store } from './state/store'
@@ -16,7 +17,9 @@ import type { Store } from './state/store'
 // Persistenz in userData/config.json.
 
 interface PersistedConfig {
-  toggles?: Partial<Toggles>
+  settings?: Partial<Settings>
+  /** Schluessel aus v1.0.0 (damals "toggles"), wird beim Laden noch gelesen. */
+  toggles?: Partial<Settings>
   roles?: Record<string, Partial<RolePrefs>>
 }
 
@@ -25,7 +28,8 @@ function configPath(): string {
 }
 
 /** Uebernimmt nur gueltige Felder aus `input` in `target`. */
-export function applyToggles(target: Toggles, input: Partial<Toggles>): void {
+export function applySettings(target: Settings, input: Partial<Settings>): void {
+  if (input.language && LANGUAGES.includes(input.language)) target.language = input.language
   if (typeof input.masterEnabled === 'boolean') target.masterEnabled = input.masterEnabled
   if (typeof input.autoAccept === 'boolean') target.autoAccept = input.autoAccept
   if (typeof input.autoPick === 'boolean') target.autoPick = input.autoPick
@@ -61,19 +65,20 @@ export function loadInto(store: Store, log: Logger): void {
   try {
     data = JSON.parse(readFileSync(configPath(), 'utf8')) as PersistedConfig
   } catch {
-    log.info('Keine config.json gefunden - starte mit Standardwerten.')
+    log.info('No config.json yet - starting with defaults.')
     return
   }
-  if (data.toggles) applyToggles(store.toggles, data.toggles)
+  const settings = data.settings ?? data.toggles
+  if (settings) applySettings(store.settings, settings)
   for (const role of ROLES) {
     const prefs = data.roles?.[role]
     if (prefs) store.roles[role] = sanitizeRolePrefs(prefs)
   }
-  log.info('Konfiguration aus config.json geladen.')
+  log.info('Settings loaded from config.json.')
 }
 
 export function save(store: Store): void {
-  const data: PersistedConfig = { toggles: store.toggles, roles: store.roles }
+  const data: PersistedConfig = { settings: store.settings, roles: store.roles }
   try {
     writeFileSync(configPath(), JSON.stringify(data, null, 2), 'utf8')
   } catch {

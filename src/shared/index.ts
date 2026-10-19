@@ -39,15 +39,6 @@ export type Role = 'top' | 'jungle' | 'middle' | 'bottom' | 'utility' | 'none'
 
 export const ROLES: readonly Role[] = ['top', 'jungle', 'middle', 'bottom', 'utility', 'none']
 
-export const ROLE_LABEL: Record<Role, string> = {
-  top: 'Top',
-  jungle: 'Jungle',
-  middle: 'Mid',
-  bottom: 'Bot',
-  utility: 'Support',
-  none: 'Ohne Rolle'
-}
-
 /** Maximale Laenge je Pick-/Ban-Liste (Erstwahl + Fallbacks). */
 export const MAX_LIST = 6
 
@@ -62,8 +53,14 @@ export type RolePrefsMap = Record<Role, RolePrefs>
 /** 'auto-lock' = kurz vor Ablauf locken; 'hover-only' = nur hovern, Nutzer lockt selbst. */
 export type LockMode = 'auto-lock' | 'hover-only'
 
-/** Toggles. Master uebersteuert alles: ist er aus, tut das Tool nichts. */
-export interface Toggles {
+/** GUI-Sprache (Englisch ist Standard). Logs sind immer Englisch. */
+export type Language = 'en' | 'de'
+
+export const LANGUAGES: readonly Language[] = ['en', 'de']
+
+/** Einstellungen. Master uebersteuert alles: ist er aus, tut das Tool nichts. */
+export interface Settings {
+  language: Language
   masterEnabled: boolean
   autoAccept: boolean
   autoPick: boolean
@@ -128,7 +125,7 @@ export interface UiState {
   lcu: LcuStatus
   phase: GameflowPhase | null
   summonerRiotId: string | null
-  toggles: Toggles
+  settings: Settings
   roles: RolePrefsMap
   /** Nur waehrend einer Champ Select gesetzt. */
   live: LiveView | null
@@ -140,7 +137,7 @@ export const IPC = {
   stateUpdate: 'state:update',
   logsGet: 'logs:get',
   logAppend: 'log:append',
-  togglesSet: 'toggles:set',
+  settingsSet: 'settings:set',
   roleSet: 'role:set',
   championsGet: 'champions:get',
   championsUpdate: 'champions:update'
@@ -151,7 +148,7 @@ export interface DraftpilotApi {
   getState(): Promise<UiState>
   getLogs(): Promise<LogEntry[]>
   getChampions(): Promise<ChampionCatalog>
-  setToggles(partial: Partial<Toggles>): Promise<UiState>
+  setSettings(partial: Partial<Settings>): Promise<UiState>
   setRole(role: Role, prefs: RolePrefs): Promise<UiState>
   onState(cb: (state: UiState) => void): () => void
   onLog(cb: (entry: LogEntry) => void): () => void

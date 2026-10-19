@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { MAX_LIST } from '@shared/index'
 import { Portrait, championName, useChampions } from '../champions'
+import { useT } from '../i18n'
 
 // Geordnete Champion-Liste einer Rolle: Erstwahl gross, Fallbacks kleiner, Pfeile zeigen
 // die Ausweich-Reihenfolge. Sortieren per Drag & Drop oder Pfeiltasten, Entfernen per x/Entf.
@@ -23,6 +24,7 @@ export function PriorityRow(props: {
 }): React.JSX.Element {
   const { kind, ids, onChange } = props
   const lookup = useChampions()
+  const t = useT()
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
   const [focusId, setFocusId] = useState<number | null>(null)
@@ -52,7 +54,7 @@ export function PriorityRow(props: {
     e.preventDefault()
   }
 
-  const noun = kind === 'pick' ? 'Pick' : 'Ban'
+  const noun = kind === 'pick' ? t.pick : t.ban
   const canAdd = ids.length < MAX_LIST
 
   return (
@@ -72,7 +74,7 @@ export function PriorityRow(props: {
                     className={`tile ${dragFrom === i ? 'is-dragging' : ''}`}
                     style={{ width: size, height: size }}
                     draggable
-                    title={`${name} (${i === 0 ? 'Erstwahl' : `Fallback ${i}`}) - ziehen oder Pfeiltasten zum Sortieren`}
+                    title={`${name} (${i === 0 ? t.firstChoice : t.fallbackN(i)}) - ${t.reorderHint}`}
                     aria-label={`${noun} ${i + 1}: ${name}`}
                     onKeyDown={(e) => onKey(e, i)}
                     onDragStart={(e) => {
@@ -102,8 +104,8 @@ export function PriorityRow(props: {
                   <button
                     type="button"
                     className="tile-remove"
-                    aria-label={`${name} entfernen`}
-                    title="Entfernen"
+                    aria-label={t.removeName(name)}
+                    title={t.remove}
                     onClick={() => remove(i)}
                   >
                     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
@@ -128,14 +130,14 @@ export function PriorityRow(props: {
                 className="tile tile-add"
                 style={{ width: ids.length === 0 ? FIRST : REST, height: ids.length === 0 ? FIRST : REST }}
                 onClick={props.onAdd}
-                aria-label={ids.length === 0 ? `Ersten ${noun} hinzufuegen` : `Fallback-${noun} hinzufuegen`}
+                aria-label={ids.length === 0 ? t.addFirst(noun) : t.addFallback(noun)}
               >
                 <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
                   <path d="M9 3v12M3 9h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                 </svg>
               </button>
             </div>
-            <span className="slot-name muted">{ids.length === 0 ? 'Erstwahl' : 'Fallback'}</span>
+            <span className="slot-name muted">{ids.length === 0 ? t.firstChoice : t.fallback}</span>
           </div>
         </div>
       )}

@@ -53,10 +53,10 @@ function createWindow(): void {
   // Renderer-Fehler sichtbar machen (sonst nur in den DevTools).
   win.webContents.on('did-fail-load', (_e, code, desc, url) => {
     if (code === -3) return // benign: abgebrochener Ladevorgang
-    winLog.error(`Renderer-Ladefehler: ${code} ${desc} (${url})`)
+    winLog.error(`Renderer failed to load: ${code} ${desc} (${url})`)
   })
   win.webContents.on('render-process-gone', (_e, details) => {
-    winLog.error(`Renderer-Prozess beendet: ${details.reason}`)
+    winLog.error(`Renderer process gone: ${details.reason}`)
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
@@ -71,7 +71,7 @@ function startBackend(): void {
   loadInto(store, createLogger('config'))
 
   const champions = new ChampionData(createLogger('champions'))
-  champions.init()
+  champions.init(store.settings.language)
 
   connector = new LcuConnector(createLogger('lcu'))
   const watcher = new GameflowWatcher(connector, createLogger('gameflow'))

@@ -1,7 +1,7 @@
 {
   "name": "draftpilot",
   "productName": "Draftpilot",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "League of Legends champ select autopilot: role-based picks & bans, auto-accept (LCU).",
   "author": "David Einenkel",
   "license": "MIT",
