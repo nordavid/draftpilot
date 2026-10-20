@@ -1,5 +1,5 @@
 //! Champ-Select-Engine. Reagiert auf jedes /lol-champ-select/v1/session-Event:
-//!  - Rolle aus `assignedPosition` bestimmen (leer -> Liste "Blind"),
+//!  - Rolle aus `assignedPosition` bestimmen (leer, z. B. Arena/Custom -> passiv bleiben),
 //!  - Pick: ersten verfuegbaren Champion der Rollen-Pickliste hovern (in der Planning-Phase
 //!    schon vorab) und kurz vor Ablauf der eigenen Pick-Action locken,
 //!  - Ban: ersten erlaubten Champion der Rollen-Banliste hovern und kurz vor Ablauf bannen.
@@ -435,10 +435,17 @@ impl<L: LcuApi> Engine<L> {
         if self.role != Some(role) {
             self.role = Some(role);
             if role == Role::None {
-                self.log.info("Role: none assigned (using the \"Blind\" list).");
+                self.log.info("No role assigned (e.g. Arena or custom game) - picks and bans stay manual.");
             } else {
                 self.log.info(format!("Role: {}.", role.key()));
             }
+        }
+        // Alle Standard-Queues weisen eine Rolle zu; ohne Rolle nichts automatisieren.
+        if role == Role::None {
+            self.pick.view = None;
+            self.ban.view = None;
+            self.publish();
+            return;
         }
         let prefs = self.shared.store().roles.get(role).clone();
 
@@ -657,7 +664,7 @@ impl<L: LcuApi> Engine<L> {
     }
 
     /// Zufalls-Eintrag aufloesen: bisherige Wahl behalten, solange sie geht, sonst neu wuerfeln
-    /// unter den eigenen Champions, die Riot fuer diese Rolle empfiehlt (Blind: alle eigenen).
+    /// unter den eigenen Champions, die Riot fuer diese Rolle empfiehlt.
     async fn random_pick(
         &mut self,
         t: &mut Track,
@@ -668,24 +675,19 @@ impl<L: LcuApi> Engine<L> {
         if let Some(id) = t.random.filter(|id| ok(*id)) {
             return Some(id);
         }
-        let position = role.lcu_position();
-        let mut pool: Vec<i64> = match position {
-            None => pickable.iter().copied().filter(|id| ok(*id)).collect(),
-            Some(position) => {
-                let Some(positions) = self.positions().await else {
-                    if !t.logged_no_random {
-                        self.log.warn("Random pick: champion positions unavailable - skipping.");
-                        t.logged_no_random = true;
-                    }
-                    return None;
-                };
-                pickable
-                    .iter()
-                    .copied()
-                    .filter(|id| ok(*id) && positions.get(id).is_some_and(|p| p.iter().any(|p| p == position)))
-                    .collect()
+        let position = role.lcu_position()?;
+        let Some(positions) = self.positions().await else {
+            if !t.logged_no_random {
+                self.log.warn("Random pick: champion positions unavailable - skipping.");
+                t.logged_no_random = true;
             }
+            return None;
         };
+        let mut pool: Vec<i64> = pickable
+            .iter()
+            .copied()
+            .filter(|id| ok(*id) && positions.get(id).is_some_and(|p| p.iter().any(|p| p == position)))
+            .collect();
         if pool.is_empty() {
             if !t.logged_no_random {
                 self.log.warn(format!("Random pick: no owned champion fits {}.", role.key()));
@@ -1105,36 +1107,47 @@ mod tests {
         assert_eq!(h.own("pick").champion_id, SYNDRA);
     }
 
+    /// Ohne zugewiesene Rolle (Arena, Custom) bleibt die Engine passiv - auch wenn fuer
+    /// "none" aus alten Versionen noch eine Liste in der Konfiguration steht.
     #[tokio::test]
-    async fn blind_pick_and_master_toggle() {
+    async fn no_role_stays_idle() {
         let mut session = draft_session();
-        session.actions.remove(0); // keine Bans
         for p in session.my_team.iter_mut() {
             p.assigned_position.clear();
         }
-        session.actions[2][0].is_in_progress = true;
+        session.actions[3][0].is_in_progress = true;
         session.timer = Timer { adjusted_time_left_in_phase: 2000.0, phase: BAN_PICK.into() };
         let mut h = Harness::new(session);
+        h.shared.store().roles.none = RolePrefs { picks: vec![LUX], bans: vec![ZED] };
 
-        // Liste "Blind" leer -> nichts tun
         h.emit().await;
+        h.engine.tick().await;
         assert_eq!(h.own("pick").champion_id, 0);
+        assert_eq!(h.own("ban").champion_id, 0);
         let live = h.live().unwrap();
         assert_eq!(live.role, Role::None);
-        assert_eq!(live.pick.unwrap().status, ActionStatus::Empty);
-        assert!(live.ban.is_none());
+        assert!(live.pick.is_none() && live.ban.is_none());
+    }
+
+    #[tokio::test]
+    async fn master_toggle_gates_everything() {
+        let mut h = Harness::new(draft_session());
+        h.end_bans();
+        h.edit(|s| {
+            s.actions[3][0].is_in_progress = true;
+            s.timer = Timer { adjusted_time_left_in_phase: 2000.0, phase: BAN_PICK.into() };
+        });
 
         // Master aus -> nichts
-        h.shared.store().roles.none = RolePrefs { picks: vec![LUX], bans: vec![] };
         h.shared.store().settings.master_enabled = false;
         h.emit().await;
         assert_eq!(h.own("pick").champion_id, 0);
         assert_eq!(h.live().unwrap().pick.unwrap().status, ActionStatus::Off);
 
-        // Master an -> Lux hovern + locken (ohne neues Event)
+        // Master an -> Ahri hovern + locken (ohne neues Event)
         h.shared.store().settings.master_enabled = true;
         h.engine.refresh().await;
-        assert_eq!(h.own("pick").champion_id, LUX);
+        assert_eq!(h.own("pick").champion_id, AHRI);
         assert!(h.own("pick").completed);
     }
 

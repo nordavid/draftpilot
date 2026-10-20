@@ -15,7 +15,7 @@ import {
 } from '@shared/index'
 import { ChampionsContext, buildLookup, type ChampionLookup } from './champions'
 import { DICTS, I18nContext, LANGUAGE_NAME } from './i18n'
-import { showWindow } from './api'
+import { fitAndShowWindow } from './api'
 import { RoleIcon } from './components/RoleIcon'
 import { PriorityRow } from './components/PriorityRow'
 import { ChampionPicker } from './components/ChampionPicker'
@@ -44,6 +44,23 @@ function fmtTime(ts: number): string {
 
 type PickerState = { role: Role; kind: 'pick' | 'ban' } | null
 
+/** Mehrhoehe des Live-Panels gegenueber der Statuszeile (gemessen, inkl. Abstand). */
+const LIVE_PANEL_EXTRA = 88
+
+/** Hoehe, die die GUI ohne Scrollbalken braucht (Titelleiste + Inhalt + Rahmen). */
+function naturalHeight(): number {
+  const titlebar = document.querySelector<HTMLElement>('.titlebar')
+  const content = document.querySelector<HTMLElement>('.content')
+  const log = document.querySelector<HTMLElement>('.log')
+  if (!titlebar || !content || !log) return 0
+  // Protokoll sitzt per margin-top:auto unten -> dessen Oberkante ohne Auto-Abstand messen.
+  const before = log.previousElementSibling as HTMLElement | null
+  const top = content.getBoundingClientRect().top
+  const above = before ? before.getBoundingClientRect().bottom - top + content.scrollTop : 0
+  const padding = parseFloat(getComputedStyle(content).paddingBottom)
+  return Math.ceil(titlebar.offsetHeight + above + log.offsetHeight + padding + 2)
+}
+
 function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
   const [ui, setUi] = useState<UiState | null>(null)
   const [champs, setChamps] = useState<ChampionLookup>(() =>
@@ -71,7 +88,7 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
 
   // Beim Betreten der Champ Select direkt die zugewiesene Rolle zeigen.
   useEffect(() => {
-    if (liveRole) setTab(liveRole)
+    if (liveRole && ROLES.includes(liveRole)) setTab(liveRole)
   }, [liveRole])
 
   useEffect(() => {
@@ -97,10 +114,17 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
     return new Set([...prefs.picks, ...prefs.bans])
   }, [ui, picker])
 
-  // Fenster startet unsichtbar (kein weisser Blitz) und erscheint mit dem ersten Zustand.
+  // Fenster startet unsichtbar (kein weisser Blitz) und erscheint mit dem ersten Zustand -
+  // so hoch, dass auch die Champ Select ohne Scrollbalken passt.
   const ready = ui !== null
+  const inChampSelect = useRef(false)
+  inChampSelect.current = !!ui?.live
   useEffect(() => {
-    if (ready) showWindow()
+    if (!ready) return
+    void document.fonts.ready.then(() => {
+      const extra = inChampSelect.current ? 0 : LIVE_PANEL_EXTRA
+      return fitAndShowWindow(naturalHeight() + extra)
+    })
   }, [ready])
 
   if (!ui) return <div className="boot" />
@@ -197,8 +221,6 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
               </div>
 
               <div className="role-body" role="tabpanel">
-                {tab === 'none' && <p className="role-note">{t.noneNote}</p>}
-
                 <div className="list-block">
                   <div className="list-head">
                     <h2>{t.picks}</h2>
@@ -262,35 +284,36 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
               <div className="setting">
                 <div className="setting-text">
                   <span>{t.confirm}</span>
-                  <small>{s.lockMode === 'auto-lock' ? t.confirmAuto : t.confirmHover}</small>
+                  <small>
+                    {s.lockMode === 'auto-lock'
+                      ? t.confirmAuto(Math.round(s.lockThresholdMs / 1000))
+                      : t.confirmHover}
+                  </small>
                 </div>
-                <Segmented
-                  label={t.confirm}
-                  value={s.lockMode}
-                  options={[
-                    { value: 'auto-lock', label: t.confirmAutoOption },
-                    { value: 'hover-only', label: t.confirmHoverOption }
-                  ]}
-                  onChange={(v) => setSettings({ lockMode: v })}
-                />
-              </div>
-              <div className="setting">
-                <div className="setting-text">
-                  <span>{t.lockTime}</span>
-                  <small>{t.lockTimeHint}</small>
+                <div className="setting-controls">
+                  {s.lockMode === 'auto-lock' && (
+                    <Stepper
+                      label={t.lockTime}
+                      lessLabel={t.less}
+                      moreLabel={t.more}
+                      value={s.lockThresholdMs}
+                      min={LOCK_THRESHOLD_MIN_MS}
+                      max={LOCK_THRESHOLD_MAX_MS}
+                      step={1000}
+                      format={(v) => `${Math.round(v / 1000)} s`}
+                      onChange={(v) => setSettings({ lockThresholdMs: v })}
+                    />
+                  )}
+                  <Segmented
+                    label={t.confirm}
+                    value={s.lockMode}
+                    options={[
+                      { value: 'auto-lock', label: t.confirmAutoOption },
+                      { value: 'hover-only', label: t.confirmHoverOption }
+                    ]}
+                    onChange={(v) => setSettings({ lockMode: v })}
+                  />
                 </div>
-                <Stepper
-                  label={t.lockTime}
-                  lessLabel={t.less}
-                  moreLabel={t.more}
-                  value={s.lockThresholdMs}
-                  min={LOCK_THRESHOLD_MIN_MS}
-                  max={LOCK_THRESHOLD_MAX_MS}
-                  step={1000}
-                  format={(v) => `${Math.round(v / 1000)} s`}
-                  onChange={(v) => setSettings({ lockThresholdMs: v })}
-                  disabled={s.lockMode !== 'auto-lock'}
-                />
               </div>
               <div className="setting">
                 <div className="setting-text">

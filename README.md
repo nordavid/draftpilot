@@ -5,9 +5,10 @@ League-Client und spricht mit ihm über die lokale Client-API (LCU). Oberfläche
 Englisch oder Deutsch.
 
 - **Match annehmen:** nimmt den Ready-Check automatisch an.
-- **Picks pro Rolle:** Erstwahl + Fallbacks für Top, Jungle, Mid, Bot, Support und
-  „Blind" (wenn keine Rolle zugewiesen wird, z. B. Blind Pick). Ist ein Champion gebannt,
-  schon weg, nicht im Besitz oder will ihn ein Teammate spielen, kommt der nächste dran.
+- **Picks pro Rolle:** Erstwahl + Fallbacks für Top, Jungle, Mid, Bot und Support. Ist ein
+  Champion gebannt, schon weg, nicht im Besitz oder will ihn ein Teammate spielen, kommt der
+  nächste dran. „Zufall" würfelt einen eigenen Champion, den Riot für die Rolle empfiehlt.
+  Ohne zugewiesene Rolle (Arena, Custom) bleibt Picken/Bannen manuell.
 - **Bans pro Rolle:** ebenfalls mit Fallbacks. Was ein Teammate (oder du selbst) spielen
   will, wird nie gebannt; was ein Teammate schon zum Bannen hovert, wird übersprungen.
 - **Dein Pick geht vor:** Wählst du selbst einen anderen Champion, hält sich Draftpilot
