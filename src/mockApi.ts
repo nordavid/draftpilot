@@ -22,7 +22,7 @@ let state: UiState = {
   },
   roles: {
     top: { picks: [], bans: [] },
-    jungle: { picks: [64, 254], bans: [] },
+    jungle: { picks: [64, 254, -1], bans: [] },
     middle: { picks: [103, 134, 61, 7], bans: [238, 157] },
     bottom: { picks: [], bans: [] },
     utility: { picks: [], bans: [] },

@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 /// Maximale Laenge je Pick-/Ban-Liste (Erstwahl + Fallbacks).
 pub const MAX_LIST: usize = 6;
+/// Platzhalter in der Pick-Liste: zufaelliger eigener Champion, der zur Rolle passt.
+pub const RANDOM_PICK: i64 = -1;
 pub const LOCK_THRESHOLD_MIN_MS: u32 = 1000;
 pub const LOCK_THRESHOLD_MAX_MS: u32 = 15000;
 
@@ -37,6 +39,18 @@ impl Role {
             "bottom" => Role::Bottom,
             "utility" => Role::Utility,
             _ => Role::None,
+        }
+    }
+
+    /// Positionsname der LCU (`recommendedPositions`); None = keine Rolle (alles erlaubt).
+    pub fn lcu_position(self) -> Option<&'static str> {
+        match self {
+            Role::Top => Some("TOP"),
+            Role::Jungle => Some("JUNGLE"),
+            Role::Middle => Some("MIDDLE"),
+            Role::Bottom => Some("BOTTOM"),
+            Role::Utility => Some("UTILITY"),
+            Role::None => None,
         }
     }
 

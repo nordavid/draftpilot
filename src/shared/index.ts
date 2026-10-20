@@ -42,6 +42,9 @@ export const ROLES: readonly Role[] = ['top', 'jungle', 'middle', 'bottom', 'uti
 /** Maximale Laenge je Pick-/Ban-Liste (Erstwahl + Fallbacks). */
 export const MAX_LIST = 6
 
+/** Platzhalter in der Pick-Liste: zufaelliger eigener Champion, der zur Rolle passt. */
+export const RANDOM_PICK = -1
+
 /** Geordnete Wunschlisten einer Rolle (numerische Riot-Champion-IDs, Erstwahl zuerst). */
 export interface RolePrefs {
   picks: number[]

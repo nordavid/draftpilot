@@ -187,7 +187,7 @@ h2 {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 16px;
+  gap: 4px 12px;
   font-size: 12.5px;
   color: var(--grey-1);
   margin-bottom: 16px;
@@ -211,6 +211,21 @@ h2 {
   background: var(--gold-3);
   box-shadow: none;
   animation: pulse 1.6s ease-in-out infinite;
+}
+
+.status-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--gold-1);
+}
+
+/* Trennstrich zwischen Verbindung und Phase (Phase = Wert, Verbindung = Label). */
+.status-phase::before {
+  content: '';
+  width: 1px;
+  height: 12px;
+  background: var(--gold-4);
 }
 
 .status-summoner {
@@ -518,6 +533,7 @@ h2 {
 }
 
 .slot {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -563,8 +579,31 @@ h2 {
   opacity: 0.35;
 }
 
-.slot.is-over .tile {
-  box-shadow: 0 0 0 2px var(--accent);
+/* Einfuegemarke beim Sortieren per Drag & Drop. */
+.slot.drop-before::before,
+.slot.drop-after::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  width: 2px;
+  height: 60px;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+.slot.drop-before::before {
+  left: -9px;
+}
+
+.slot.drop-after::after {
+  right: -9px;
+}
+
+.portrait-random {
+  display: grid;
+  place-items: center;
+  background: var(--ink-2);
+  color: var(--gold-2);
 }
 
 .prio-ban .tile:not(.tile-add)::after {
@@ -941,6 +980,37 @@ h2 {
 
 .search:focus {
   border-color: var(--gold-3);
+}
+
+.random-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 7px 8px;
+  border: 1px solid var(--gold-5);
+  background: var(--void);
+  text-align: left;
+}
+
+.random-option:hover {
+  border-color: var(--gold-3);
+}
+
+.random-option .portrait {
+  box-shadow: 0 0 0 1px var(--gold-5);
+}
+
+.random-text {
+  display: flex;
+  flex-direction: column;
+  color: var(--gold-1);
+}
+
+.random-text small {
+  font-size: 11.5px;
+  color: var(--grey-2);
 }
 
 .sheet-empty {

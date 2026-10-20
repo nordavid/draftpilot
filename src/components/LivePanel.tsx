@@ -19,7 +19,7 @@ function useNow(active: boolean): number {
 function describe(t: Dict, kind: 'pick' | 'ban', v: ActionView, now: number): string {
   switch (v.status) {
     case 'waiting':
-      return kind === 'pick' ? t.waitingPick : t.waitingBan
+      return t.queued
     case 'hovering': {
       if (v.lockAt === null) return t.hovered
       const s = (Math.max(0, v.lockAt - now) / 1000).toLocaleString(t.locale, {
@@ -29,7 +29,7 @@ function describe(t: Dict, kind: 'pick' | 'ban', v: ActionView, now: number): st
       return kind === 'pick' ? t.locksIn(s) : t.bansIn(s)
     }
     case 'hover-only':
-      return t.hoverOnly
+      return t.hovered
     case 'done':
       return kind === 'pick' ? t.locked : t.banned
     case 'manual':

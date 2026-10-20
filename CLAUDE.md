@@ -34,7 +34,12 @@ League-Client-Vokabular, bewusst schlicht: Hextech-Navy (`#010a13`/`#0a1428`), d
 Goldrahmen (`#463714`/`#785a28`/`#c8aa6e`), eckige Formen, Marcellus (Versalien) nur für
 Wortmarke und Überschriften, sonst Segoe UI. Hextech-Blau `#0ac8b9` = läuft/live,
 Gold = Auswahl/Erstwahl, Rot `#e84057` = Ban. Eigene Titelleiste (`decorations: false`,
-`data-tauri-drag-region`, `WindowControls.tsx`).
+`data-tauri-drag-region`, `WindowControls.tsx`). Texte kurz halten, keine Tooltips.
+In der Champ Select ersetzt das Live-Panel die Statuszeile.
+
+Fenster startet `visible: false` + `backgroundColor` (kein weißer Blitz); das Frontend zeigt
+es mit dem ersten Zustand (`showWindow`), Rust nach 3 s als Sicherheitsnetz.
+`dragDropEnabled: false` ist Pflicht, sonst schluckt Tauri unter Windows HTML5-Drag&Drop.
 
 ## Struktur
 
@@ -71,6 +76,11 @@ src/shared/index.ts  TS-Spiegel von model.rs
   Ban verhindert. Der Client validiert; lehnt er einen Hover per HTTP-Fehler ab, kommt der
   Champion in `Track.rejected` und der nächste ist dran. `pickable-champion-ids` bleibt
   (Besitz), eine **leere** Liste gilt aber als „unbekannt" -> später erneut prüfen.
+- **Zufall** (`RANDOM_PICK = -1` in der Pick-Liste, GUI: Würfel): eigener (`pickable`)
+  Champion, den Riot für die Rolle empfiehlt (LCU `/lol-perks/v1/recommended-champion-positions`,
+  je Champ Select gecacht), nicht weg, nicht von Mates beansprucht, nicht auf der eigenen
+  Banliste. Blind: alle eigenen. Die Wahl bleibt stabil (`Track.random`) und wird nur neu
+  gewürfelt, wenn sie nicht mehr geht. Ohne Positionsdaten -> kein Zufall (kein Janna-Jungle).
 - **Neubewertung ~1×/s auch ohne Event** (Events kommen unregelmäßig, im Solo-Custom gar
   nicht). Der Timer rechnet deshalb ab Empfang des Events (`session_at`), nie ab Auswertung.
 - **Lock/Ban** kurz vor Ablauf (`lockThresholdMs`, 1–15 s, Default 3 s). Modus

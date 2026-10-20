@@ -12,7 +12,7 @@
 //! Alle Methoden laufen ueber `&mut self` in einer einzigen Task -> LCU-Schreibzugriffe
 //! sind automatisch serialisiert (kein Doppel-Lock, kein Hover-Race).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::sync::Arc;
 
@@ -21,10 +21,14 @@ use serde_json::{json, Value};
 
 use crate::lcu::{LcuHandle, CHAMP_SELECT_SESSION_URI};
 use crate::log::Logger;
-use crate::model::{now_ms, ActionStatus, ActionView, LiveView, LockMode, Role, Settings};
+use crate::model::{
+    now_ms, ActionStatus, ActionView, LiveView, LockMode, Role, RolePrefs, Settings, RANDOM_PICK,
+};
 use crate::state::Shared;
 
 const PICKABLE_PATH: &str = "/lol-champ-select/v1/pickable-champion-ids";
+/// Riots empfohlene Positionen je Champion (Grundlage fuer "Zufall": kein Janna-Jungle).
+const POSITIONS_PATH: &str = "/lol-perks/v1/recommended-champion-positions";
 const ACTIONS_PATH: &str = "/lol-champ-select/v1/session/actions";
 /// Draft-Declare-Phase: Pick-Absicht darf gehovert, aber nichts gelockt/gebannt werden.
 const PLANNING: &str = "PLANNING";
@@ -255,6 +259,9 @@ struct Track {
     last_error: Option<String>,
     /// Champions, die der Client beim Hovern abgelehnt hat -> naechsten Kandidaten nehmen.
     rejected: HashSet<i64>,
+    /// Gewuerfelter Champion fuer den Zufalls-Eintrag (bleibt stabil, solange er geht).
+    random: Option<i64>,
+    logged_no_random: bool,
 }
 
 impl Track {
@@ -274,6 +281,8 @@ impl Track {
             logged_unavailable: HashSet::new(),
             last_error: None,
             rejected: HashSet::new(),
+            random: None,
+            logged_no_random: false,
         }
     }
 
@@ -312,6 +321,8 @@ pub struct Engine<L: LcuApi> {
     pick: Track,
     ban: Track,
     announced_passive: bool,
+    /// Empfohlene Positionen je Champion-ID (pro Champ Select einmal aus der LCU geladen).
+    positions: Option<HashMap<i64, Vec<String>>>,
 }
 
 impl<L: LcuApi> Engine<L> {
@@ -329,6 +340,7 @@ impl<L: LcuApi> Engine<L> {
             pick: Track::new(Kind::Pick),
             ban: Track::new(Kind::Ban),
             announced_passive: false,
+            positions: None,
         }
     }
 
@@ -437,7 +449,7 @@ impl<L: LcuApi> Engine<L> {
 
         // Pick zuerst: der Pick-Kandidat fliesst in die Ban-Ausschluesse ein.
         let mut pick = std::mem::replace(&mut self.pick, Track::new(Kind::Pick));
-        self.evaluate_pick(&session, &mut pick, &prefs.picks).await;
+        self.evaluate_pick(&session, &mut pick, role, &prefs).await;
         self.pick = pick;
         let mut ban = std::mem::replace(&mut self.ban, Track::new(Kind::Ban));
         self.evaluate_ban(&session, &mut ban, &prefs.bans).await;
@@ -552,7 +564,8 @@ impl<L: LcuApi> Engine<L> {
 
     // --- Pick ---------------------------------------------------------------
 
-    async fn evaluate_pick(&mut self, session: &Session, t: &mut Track, list: &[i64]) {
+    async fn evaluate_pick(&mut self, session: &Session, t: &mut Track, role: Role, prefs: &RolePrefs) {
+        let list = &prefs.picks;
         let Some(action) = self.prepare(session, t, list) else { return };
 
         // Verfuegbarkeit unklar -> im Zweifel nichts tun.
@@ -567,6 +580,23 @@ impl<L: LcuApi> Engine<L> {
         let claims = session.teammate_claims();
         let mut target = None;
         for &c in list {
+            if c == RANDOM_PICK {
+                // Zufall: eigener, zur Rolle passender Champion, den sonst niemand will.
+                let held = action.champion_id;
+                let rejected = t.rejected.clone();
+                let ok = |id: i64| {
+                    pickable.contains(&id)
+                        && !unavailable.contains(&id)
+                        && !rejected.contains(&id)
+                        && !prefs.bans.contains(&id)
+                        && (!claims.contains(&id) || held == id)
+                };
+                if let Some(id) = self.random_pick(t, role, &pickable, &ok).await {
+                    target = Some(id);
+                    break;
+                }
+                continue;
+            }
             if unavailable.contains(&c) || t.rejected.contains(&c) {
                 continue;
             }
@@ -605,6 +635,70 @@ impl<L: LcuApi> Engine<L> {
         t.time_left_at = self.session_at;
         self.set_active_view(t, target);
         self.maybe_lock(t).await;
+    }
+
+    /// Empfohlene Positionen aus der LCU (gecacht je Champ Select; None bei Fehler).
+    async fn positions(&mut self) -> Option<&HashMap<i64, Vec<String>>> {
+        if self.positions.is_none() {
+            let Some((200, Value::Object(map))) = self.lcu.get_json(POSITIONS_PATH).await else {
+                return None;
+            };
+            let parsed = map
+                .iter()
+                .filter_map(|(id, entry)| {
+                    let id = id.parse::<i64>().ok()?;
+                    let list = entry.get("recommendedPositions")?.as_array()?;
+                    Some((id, list.iter().filter_map(|p| p.as_str().map(str::to_string)).collect()))
+                })
+                .collect();
+            self.positions = Some(parsed);
+        }
+        self.positions.as_ref()
+    }
+
+    /// Zufalls-Eintrag aufloesen: bisherige Wahl behalten, solange sie geht, sonst neu wuerfeln
+    /// unter den eigenen Champions, die Riot fuer diese Rolle empfiehlt (Blind: alle eigenen).
+    async fn random_pick(
+        &mut self,
+        t: &mut Track,
+        role: Role,
+        pickable: &HashSet<i64>,
+        ok: &(dyn Fn(i64) -> bool + Sync),
+    ) -> Option<i64> {
+        if let Some(id) = t.random.filter(|id| ok(*id)) {
+            return Some(id);
+        }
+        let position = role.lcu_position();
+        let mut pool: Vec<i64> = match position {
+            None => pickable.iter().copied().filter(|id| ok(*id)).collect(),
+            Some(position) => {
+                let Some(positions) = self.positions().await else {
+                    if !t.logged_no_random {
+                        self.log.warn("Random pick: champion positions unavailable - skipping.");
+                        t.logged_no_random = true;
+                    }
+                    return None;
+                };
+                pickable
+                    .iter()
+                    .copied()
+                    .filter(|id| ok(*id) && positions.get(id).is_some_and(|p| p.iter().any(|p| p == position)))
+                    .collect()
+            }
+        };
+        if pool.is_empty() {
+            if !t.logged_no_random {
+                self.log.warn(format!("Random pick: no owned champion fits {}.", role.key()));
+                t.logged_no_random = true;
+            }
+            return None;
+        }
+        pool.sort_unstable();
+        let id = pool[(random_u64() % pool.len() as u64) as usize];
+        t.random = Some(id);
+        t.logged_no_random = false;
+        self.log.info(format!("Random pick: {} (out of {}).", self.label(id), pool.len()));
+        Some(id)
     }
 
     // --- Ban ----------------------------------------------------------------
@@ -771,8 +865,17 @@ impl<L: LcuApi> Engine<L> {
         self.pick = Track::new(Kind::Pick);
         self.ban = Track::new(Kind::Ban);
         self.announced_passive = false;
+        self.positions = None;
         self.publish();
     }
+}
+
+/// Zufallszahl ohne zusaetzliche Crate (RandomState ist pro Aufruf zufaellig geseedet).
+fn random_u64() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write_i64(now_ms());
+    hasher.finish()
 }
 
 // --- Tests: simulierte Champ Selects gegen eine Fake-LCU ---------------------
@@ -792,6 +895,7 @@ mod tests {
     const YASUO: i64 = 157;
     const YONE: i64 = 777;
     const LUX: i64 = 99;
+    const JANNA: i64 = 40;
     const ME: i64 = 2;
 
     #[derive(Clone)]
@@ -801,6 +905,8 @@ mod tests {
         bannable: Arc<Mutex<Vec<i64>>>,
         /// Champions, die der "Client" beim PATCH ablehnt (HTTP 500).
         refuse: Arc<Mutex<Vec<i64>>>,
+        /// Antwort von recommended-champion-positions.
+        positions: Arc<Mutex<Value>>,
     }
 
     impl LcuApi for FakeLcu {
@@ -810,6 +916,9 @@ mod tests {
             }
             if path.ends_with("bannable-champion-ids") {
                 return Some((200, json!(*self.bannable.lock().unwrap())));
+            }
+            if path.ends_with("recommended-champion-positions") {
+                return Some((200, self.positions.lock().unwrap().clone()));
             }
             Some((404, Value::Null))
         }
@@ -868,6 +977,13 @@ mod tests {
                 pickable: Arc::new(Mutex::new(vec![AHRI, SYNDRA, ORI, LUX])),
                 bannable: Arc::new(Mutex::new(vec![AHRI, SYNDRA, ORI, ZED, YASUO, YONE, LUX])),
                 refuse: Arc::new(Mutex::new(Vec::new())),
+                positions: Arc::new(Mutex::new(json!({
+                    "103": { "recommendedPositions": ["MIDDLE"] },
+                    "134": { "recommendedPositions": ["MIDDLE"] },
+                    "61": { "recommendedPositions": ["MIDDLE"] },
+                    "99": { "recommendedPositions": ["MIDDLE", "UTILITY"] },
+                    "40": { "recommendedPositions": ["UTILITY"] }
+                }))),
             };
             let engine = Engine::new(fake.clone(), shared.clone(), Logger::new(&hub, "test"), Arc::new(|id| id.to_string()));
             Harness { fake, shared, engine }
@@ -1100,6 +1216,55 @@ mod tests {
         assert_eq!(h.own("ban").champion_id, 0);
         h.emit().await;
         assert_eq!(h.own("ban").champion_id, YASUO);
+    }
+
+    /// Zufall: nur eigene Champions der Rolle, nichts Gebanntes/Beanspruchtes/selbst zu Bannendes.
+    #[tokio::test]
+    async fn random_pick_respects_role_ownership_and_team() {
+        let mut h = Harness::new(draft_session());
+        *h.fake.pickable.lock().unwrap() = vec![AHRI, SYNDRA, ORI, LUX, JANNA];
+        h.shared.store().roles.middle = RolePrefs { picks: vec![RANDOM_PICK], bans: vec![ORI] };
+        h.edit(|s| {
+            s.my_team[1].champion_pick_intent = AHRI; // Teammate will Ahri
+            s.bans.their_team_bans = vec![SYNDRA]; // Syndra gebannt
+        });
+        h.emit().await;
+        // Janna passt nicht auf Mid, Ori steht auf der eigenen Banliste -> nur Lux bleibt.
+        assert_eq!(h.own("pick").champion_id, LUX);
+
+        // Stabil: bei weiteren Events wird nicht neu gewuerfelt.
+        h.emit().await;
+        h.emit().await;
+        assert_eq!(h.own("pick").champion_id, LUX);
+    }
+
+    /// Zufall wuerfelt neu, wenn der bisherige Champion weg ist.
+    #[tokio::test]
+    async fn random_pick_rerolls_when_taken() {
+        let mut h = Harness::new(draft_session());
+        *h.fake.pickable.lock().unwrap() = vec![AHRI, LUX];
+        h.shared.store().roles.middle = RolePrefs { picks: vec![RANDOM_PICK], bans: vec![] };
+        h.emit().await;
+        let first = h.own("pick").champion_id;
+        assert!(first == AHRI || first == LUX);
+
+        let other = if first == AHRI { LUX } else { AHRI };
+        h.edit(|s| s.bans.their_team_bans = vec![first]);
+        h.emit().await;
+        assert_eq!(h.own("pick").champion_id, other);
+    }
+
+    /// Kein Janna-Jungle: passt kein eigener Champion zur Rolle, passiert nichts.
+    #[tokio::test]
+    async fn random_pick_never_goes_off_role() {
+        let mut session = draft_session();
+        session.my_team[2].assigned_position = "jungle".into();
+        let mut h = Harness::new(session);
+        *h.fake.pickable.lock().unwrap() = vec![JANNA, LUX];
+        h.shared.store().roles.jungle = RolePrefs { picks: vec![RANDOM_PICK], bans: vec![] };
+        h.emit().await;
+        assert_eq!(h.own("pick").champion_id, 0);
+        assert_eq!(h.live().unwrap().pick.unwrap().status, ActionStatus::None);
     }
 
     #[test]
