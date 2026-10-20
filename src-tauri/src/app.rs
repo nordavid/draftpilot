@@ -102,7 +102,7 @@ async fn install_update(app: AppHandle, ctx: State<'_, AppCtx>) -> Result<(), St
     let Some(update) = update else { return Err("No update available.".into()) };
     ctx.log.info(format!("Installing update {}...", update.version));
     // Der Updater beendet per process::exit -> kein RunEvent::Exit, also vorher speichern.
-    settings::save(&ctx.shared.store(), &ctx.config_path);
+    flush_settings(&ctx.shared, &ctx.config_path, &ctx.log);
     if let Err(err) = update.download_and_install(|_, _| {}, || {}).await {
         ctx.log.error(format!("Update failed: {err}"));
         return Err(err.to_string());
@@ -121,12 +121,22 @@ async fn push_state(app: AppHandle, shared: Arc<Shared>) {
     }
 }
 
+/// Schreibt die Einstellungen - aber nur, wenn es in dieser Sitzung Aenderungen gab.
+fn flush_settings(shared: &Shared, path: &std::path::Path, log: &Logger) {
+    if !shared.take_settings_dirty() {
+        return;
+    }
+    if let Err(err) = settings::save(&shared.store(), path) {
+        log.error(format!("Saving config.json failed: {err}"));
+    }
+}
+
 /// Entprelltes Speichern der Einstellungen (zusaetzlich Flush beim Beenden).
-async fn persist(shared: Arc<Shared>, path: PathBuf) {
+async fn persist(shared: Arc<Shared>, path: PathBuf, log: Logger) {
     loop {
         shared.settings_changed.notified().await;
         tokio::time::sleep(Duration::from_millis(400)).await;
-        settings::save(&shared.store(), &path);
+        flush_settings(&shared, &path, &log);
     }
 }
 
@@ -303,8 +313,13 @@ pub fn run() {
                 }));
             }
 
-            // Gleicher Ort wie die Electron-Version: %APPDATA%\Draftpilot
-            let data_dir = app.path().data_dir()?.join("Draftpilot");
+            // Gleicher Ort wie die Electron-Version: %APPDATA%\Draftpilot. Testinstanzen
+            // bekommen per DRAFTPILOT_DATA_DIR einen eigenen Ordner (sonst teilen sie sich
+            // config.json mit der echten App).
+            let data_dir = match std::env::var_os("DRAFTPILOT_DATA_DIR") {
+                Some(dir) => std::path::PathBuf::from(dir),
+                None => app.path().data_dir()?.join("Draftpilot"),
+            };
             let config_path = data_dir.join("config.json");
             let shared = Shared::new(hub.clone(), app.package_info().version.to_string());
             settings::load_into(&mut shared.store(), &config_path, &Logger::new(&hub, "config"));
@@ -337,7 +352,7 @@ pub fn run() {
 
             use tauri::async_runtime::spawn;
             spawn(push_state(handle.clone(), shared.clone()));
-            spawn(persist(shared.clone(), config_path.clone()));
+            spawn(persist(shared.clone(), config_path.clone(), Logger::new(&hub, "config")));
             spawn(run_engine(engine, engine_rx));
             spawn(route_events(
                 event_rx,
@@ -378,10 +393,10 @@ pub fn run() {
         .expect("error while building Draftpilot");
 
     app.run(|handle, event| {
-        // Beim Beenden ausstehende Aenderungen sofort schreiben.
+        // Beim Beenden ausstehende Aenderungen sofort schreiben (nur wenn es welche gibt).
         if let RunEvent::Exit = event {
             if let Some(ctx) = handle.try_state::<AppCtx>() {
-                settings::save(&ctx.shared.store(), &ctx.config_path);
+                flush_settings(&ctx.shared, &ctx.config_path, &ctx.log);
             }
         }
     });

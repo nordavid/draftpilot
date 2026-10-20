@@ -106,6 +106,12 @@ src/shared/index.ts  TS-Spiegel von model.rs
   typisiert -> fehlende Schlüssel fallen im Typecheck auf).
 - Einstellungen: `%APPDATA%\Draftpilot\config.json` (gleiches Format wie die Electron-Version;
   Schlüssel `toggles` aus v1.0.0 wird noch gelesen).
+- **config.json nie „auf Verdacht“ schreiben** (v2.3.1, nach Datenverlust): nur bei echten
+  Änderungen dieser Sitzung (`touch_settings` -> `take_settings_dirty`), atomar
+  (`.json.tmp` + rename), vorige Fassung als `config.bak.json`. Unlesbare Datei ->
+  `config.broken.json`, nicht überschreiben.
+- **Testinstanzen immer mit `DRAFTPILOT_DATA_DIR=<scratch>` starten**, sonst teilen sie sich
+  `config.json` mit der echten App des Nutzers (andere `identifier` reicht nicht).
 - Engine-Änderungen mit einem Test in `engine.rs` absichern (`cargo test`).
 - Vite baut nach `web-dist/` (nicht `dist/`: dort liegen alte Electron-Builds, die der Nutzer
   ggf. noch direkt startet). `dist/` nie pauschal löschen.

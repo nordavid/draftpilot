@@ -72,13 +72,39 @@ pub fn sanitize_role_prefs(input: &Value) -> RolePrefs {
     }
 }
 
-pub fn load_into(store: &mut Store, path: &Path, log: &Logger) {
-    let data: Value = match fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok()) {
-        Some(v) => v,
-        None => {
-            log.info("No config.json yet - starting with defaults.");
-            return;
+/// Ergebnis des Ladens. Nur bei `Loaded`/`Missing` ist der Stand im Speicher verlaesslich.
+#[derive(Debug, PartialEq, Eq)]
+pub enum LoadOutcome {
+    Loaded,
+    Missing,
+    /// Datei da, aber nicht lesbar/kein JSON -> als config.broken.json gesichert.
+    Unreadable,
+}
+
+fn read_json(path: &Path) -> Option<Value> {
+    serde_json::from_str(&fs::read_to_string(path).ok()?).ok()
+}
+
+pub fn load_into(store: &mut Store, path: &Path, log: &Logger) -> LoadOutcome {
+    if !path.exists() {
+        log.info("No config.json yet - starting with defaults.");
+        return LoadOutcome::Missing;
+    }
+    // Kurz wiederholen: eine andere Instanz koennte gerade schreiben.
+    let mut data = None;
+    for attempt in 0..5 {
+        data = read_json(path);
+        if data.is_some() {
+            break;
         }
+        if attempt < 4 {
+            std::thread::sleep(std::time::Duration::from_millis(80));
+        }
+    }
+    let Some(data) = data else {
+        let _ = fs::copy(path, path.with_extension("broken.json"));
+        log.warn("config.json unreadable - kept a copy as config.broken.json, using defaults.");
+        return LoadOutcome::Unreadable;
     };
     // "toggles" = Schluessel aus v1.0.0.
     if let Some(settings) = data.get("settings").or_else(|| data.get("toggles")) {
@@ -92,22 +118,69 @@ pub fn load_into(store: &mut Store, path: &Path, log: &Logger) {
         }
     }
     log.info("Settings loaded from config.json.");
+    LoadOutcome::Loaded
 }
 
-pub fn save(store: &Store, path: &Path) {
+/// Schreibt atomar (Temp-Datei + Umbenennen), damit nie eine halbe Datei gelesen wird.
+/// Die vorige Fassung bleibt als config.bak.json erhalten.
+pub fn save(store: &Store, path: &Path) -> std::io::Result<()> {
     let data = json!({ "settings": store.settings, "roles": store.roles });
     if let Some(dir) = path.parent() {
-        let _ = fs::create_dir_all(dir);
+        fs::create_dir_all(dir)?;
     }
-    if let Ok(text) = serde_json::to_string_pretty(&data) {
-        // Schreibfehler sind nicht fatal.
-        let _ = fs::write(path, text);
+    let text = serde_json::to_string_pretty(&data).map_err(std::io::Error::other)?;
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, text)?;
+    if path.exists() {
+        let _ = fs::copy(path, path.with_extension("bak.json"));
     }
+    fs::rename(&tmp, path)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("draftpilot-test-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn save_is_atomic_and_keeps_backup() {
+        let dir = temp_dir("save");
+        let path = dir.join("config.json");
+        let log = Logger::new(&crate::log::LogHub::new(), "test");
+
+        let mut store = Store::default();
+        store.roles.middle.picks = vec![101];
+        save(&store, &path).unwrap();
+        store.roles.middle.picks = vec![777];
+        save(&store, &path).unwrap();
+
+        let mut loaded = Store::default();
+        assert_eq!(load_into(&mut loaded, &path, &log), LoadOutcome::Loaded);
+        assert_eq!(loaded.roles.middle.picks, vec![777]);
+        let backup: Value = read_json(&dir.join("config.bak.json")).unwrap();
+        assert_eq!(backup["roles"]["middle"]["picks"], json!([101]));
+        assert!(!dir.join("config.json.tmp").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unreadable_config_is_reported_and_kept() {
+        let dir = temp_dir("broken");
+        let path = dir.join("config.json");
+        fs::write(&path, "{ \"roles\": ").unwrap();
+        let log = Logger::new(&crate::log::LogHub::new(), "test");
+        let mut store = Store::default();
+        assert_eq!(load_into(&mut store, &path, &log), LoadOutcome::Unreadable);
+        assert!(dir.join("config.broken.json").exists());
+        assert_eq!(load_into(&mut Store::default(), &dir.join("nope.json"), &log), LoadOutcome::Missing);
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn applies_only_valid_fields() {
