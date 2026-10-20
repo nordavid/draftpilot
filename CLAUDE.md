@@ -57,7 +57,7 @@ src-tauri/src/
   state.rs       Single Source of Truth (Store + Notify für GUI/Speichern)
   model.rs       Datenmodell = JSON-Vertrag zum Frontend (camelCase)
   log.rs         Ringpuffer + Event an die GUI
-src/             React-GUI (App, PriorityRow, ChampionPicker, LivePanel, i18n, api)
+src/             React-GUI (App, PriorityRow, ChampionPicker, LivePanel, UpdateNotice, i18n, api)
 src/shared/index.ts  TS-Spiegel von model.rs
 ```
 
@@ -104,12 +104,40 @@ src/shared/index.ts  TS-Spiegel von model.rs
 - Vite baut nach `web-dist/` (nicht `dist/`: dort liegen alte Electron-Builds, die der Nutzer
   ggf. noch direkt startet). `dist/` nie pauschal löschen.
 
+## Updates (In-App)
+
+- **Quelle:** GitHub Releases von `nordavid/draftpilot` (öffentlich, sonst kann der Updater
+  ohne Login nicht laden). Endpoint in `tauri.conf.json` (`plugins.updater`):
+  `…/releases/latest/download/latest.json` -> immer das neueste Release.
+- **Ablauf:** Rust prüft beim Start (`check_update` in `app.rs`, nicht in Dev-Builds) und
+  setzt `UiState.update`; die GUI zeigt dann `UpdateNotice` unter der Titelleiste. Klick ->
+  Befehl `install_update`: Einstellungen speichern (der Updater beendet per `process::exit`,
+  ohne `RunEvent::Exit`), laden, Signatur prüfen, NSIS-Installer passiv starten; der
+  startet die App danach neu. Kein `tauri-plugin-process` nötig. Fehler (offline, noch
+  kein Release) nur ins Log.
+- **Signatur:** Schlüsselpaar aus `npx tauri signer generate`. Privater Schlüssel liegt
+  **außerhalb des Repos** unter `%USERPROFILE%\.tauri\draftpilot.key` (ohne Passwort),
+  öffentlicher Schlüssel als `pubkey` in `tauri.conf.json`. **Sichern!** Ohne ihn können
+  installierte Versionen keine Updates mehr annehmen (dann nur noch manuell neu
+  installieren). `scripts/build.mjs` setzt `TAURI_SIGNING_PRIVATE_KEY` (Pfad) automatisch.
+- **Release-Ablauf** (lokal, **keine GitHub Actions**):
+  1. Version in `package.json`, `src-tauri/Cargo.toml` und `src-tauri/tauri.conf.json` erhöhen.
+  2. `npm run release -- "Kurze Notiz"` -> `dist/<version>/`: Setup-EXE, `.sig`,
+     `latest.json` (Version, Notiz, Datum, URL + Signatur), portable `Draftpilot.exe`.
+  3. Commit + `git push` (gh legt den Tag `v<version>` auf den Remote-Stand).
+  4. `npm run upload` -> `gh release create v<version>` mit Setup, `latest.json` und
+     portabler EXE (einmalig vorher `gh auth login`).
+- Die portable EXE aktualisiert sich nicht selbst: „Installieren" installiert die neue
+  Version regulär (`%LOCALAPPDATA%\Draftpilot`) und startet diese.
+
 ## Befehle
 
 - `npm run dev` — Tauri-Dev (Vite-HMR + Rust-Neustart)
 - `npm run release` — Release bauen und nach `dist/<version>/` kopieren (`Draftpilot.exe`
-  portabel + NSIS-Installer). Dem Nutzer immer diese Kopien geben: startet er die EXE direkt
-  aus `src-tauri/target/release`, ist sie gesperrt und der nächste Build scheitert.
-- `npm run build` — nur bauen (`src-tauri/target/release/...`)
+  portabel + NSIS-Installer + `.sig` + `latest.json`). Dem Nutzer immer diese Kopien geben:
+  startet er die EXE direkt aus `src-tauri/target/release`, ist sie gesperrt und der nächste
+  Build scheitert.
+- `npm run upload` — `dist/<version>/` als GitHub-Release `v<version>` hochladen (gh CLI)
+- `npm run build` — nur bauen (`src-tauri/target/release/...`, signiert; braucht den Schlüssel)
 - `npm run typecheck` · `cargo test` (in `src-tauri/`) · `npm run vite:dev` (GUI mit Mock)
 - Rust/cargo liegt in `%USERPROFILE%\.cargo\bin` (in frischen Shells im PATH).

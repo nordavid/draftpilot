@@ -16,6 +16,8 @@ pub struct Store {
     pub live: Option<LiveView>,
     pub settings: Settings,
     pub roles: RolePrefsMap,
+    /// Verfuegbares Update (Version), gesetzt von der Update-Pruefung beim Start.
+    pub update: Option<String>,
 }
 
 impl Default for Store {
@@ -27,6 +29,7 @@ impl Default for Store {
             live: None,
             settings: Settings::default(),
             roles: RolePrefsMap::default(),
+            update: None,
         }
     }
 }
@@ -75,6 +78,7 @@ impl Shared {
             settings: s.settings.clone(),
             roles: s.roles.clone(),
             live: s.live.clone(),
+            update: s.update.clone(),
         }
     }
 }

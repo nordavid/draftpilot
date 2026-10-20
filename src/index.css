@@ -175,6 +175,49 @@ h2 {
   color: #fff;
 }
 
+/* --- Update-Hinweis (unter der Titelleiste) ---------------------------------- */
+
+.update {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  background: var(--ink-2);
+  border-bottom: 1px solid var(--gold-5);
+  font-size: 12.5px;
+  color: var(--gold-1);
+}
+
+.update.is-failed .update-text {
+  color: var(--red);
+}
+
+.update-version {
+  color: var(--grey-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.update button {
+  margin-left: auto;
+  border: 1px solid var(--gold-4);
+  background: none;
+  padding: 3px 12px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold-1);
+}
+
+.update button:hover:not(:disabled) {
+  background: var(--steel);
+  border-color: var(--gold-2);
+}
+
+.update button:disabled {
+  color: var(--grey-1);
+}
+
 /* --- Inhalt ------------------------------------------------------------------ */
 
 .content {

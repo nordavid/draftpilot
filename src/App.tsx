@@ -22,6 +22,7 @@ import { ChampionPicker } from './components/ChampionPicker'
 import { LivePanel } from './components/LivePanel'
 import { Segmented, Stepper, Switch } from './components/Controls'
 import { WindowControls } from './components/WindowControls'
+import { UpdateNotice } from './components/UpdateNotice'
 
 const TAB_KEY = 'draftpilot.tab'
 
@@ -151,6 +152,8 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
             </label>
             <WindowControls minimizeLabel={t.minimize} closeLabel={t.close} />
           </header>
+
+          {ui.update && <UpdateNotice version={ui.update} onInstall={api.installUpdate} />}
 
           <main className="content">
             {/* In der Champ Select ersetzt das Live-Panel die Statuszeile. */}

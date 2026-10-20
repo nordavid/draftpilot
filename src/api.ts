@@ -25,6 +25,7 @@ const tauriApi: DraftpilotApi = {
   getChampions: () => invoke('get_champions'),
   setSettings: (patch) => invoke('set_settings', { patch }),
   setRole: (role, prefs) => invoke('set_role', { role, prefs }),
+  installUpdate: () => invoke('install_update'),
   onState: (cb) => subscribe('state', cb),
   onLog: (cb) => subscribe('log', cb),
   onChampions: (cb) => subscribe('champions', cb)

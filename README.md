@@ -36,6 +36,25 @@ npm run dev
 - `cargo test` (in `src-tauri/`) — Engine-Tests mit simulierten Champ Selects
 - `npm run vite:dev` — nur die Oberfläche im Browser, mit Beispieldaten
 
+## Updates
+
+Die installierte App sucht beim Start nach einer neueren Version (GitHub Releases) und
+zeigt dann oben „Update verfügbar – Installieren". Ein Klick lädt das Update, prüft die
+Signatur, installiert und startet neu.
+
+Release veröffentlichen (lokal, ohne GitHub Actions):
+
+```bash
+npm run release -- "Kurze Notiz"
+git push
+npm run upload
+```
+
+`npm run release` braucht den privaten Signaturschlüssel unter
+`%USERPROFILE%\.tauri\draftpilot.key` (nicht im Repo) und legt Installer, `.sig`,
+`latest.json` und die portable EXE in `dist/<version>/`. `npm run upload` lädt sie per
+`gh release create` hoch (einmalig `gh auth login`).
+
 Einstellungen und Listen landen in `%APPDATA%\Draftpilot\config.json`. Die Champion-Liste
 kommt von Riots Data Dragon, wird bei jedem Start gegen den aktuellen Patch abgeglichen und
 je Sprache daneben gecacht.
