@@ -1,6 +1,6 @@
 [package]
 name = "draftpilot"
-version = "2.3.1"
+version = "2.3.2"
 description = "League of Legends champ select autopilot"
 authors = ["David Einenkel"]
 license = "MIT"

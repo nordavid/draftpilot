@@ -222,8 +222,6 @@ h2 {
 
 .content {
   flex: 1;
-  display: flex;
-  flex-direction: column;
   overflow-y: auto;
   padding: 12px 20px 14px;
 }
@@ -644,13 +642,6 @@ h2 {
   right: -9px;
 }
 
-.portrait-random {
-  display: grid;
-  place-items: center;
-  background: var(--ink-2);
-  color: var(--gold-2);
-}
-
 .prio-ban .tile:not(.tile-add)::after {
   content: '';
   position: absolute;
@@ -761,6 +752,18 @@ h2 {
   font-size: 14px;
 }
 
+/* Zufall: Wuerfel mittig (muss nach .portrait stehen, sonst gewinnt display:block). */
+.portrait-random {
+  display: grid;
+  place-items: center;
+  background: var(--ink-2);
+  color: var(--gold-2);
+}
+
+.portrait-random svg {
+  display: block;
+}
+
 /* --- Einstellungen ----------------------------------------------------------- */
 
 .settings {
@@ -777,12 +780,6 @@ h2 {
   border-bottom: 1px solid var(--line);
 }
 
-.setting-controls {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 
 .setting-text {
   display: flex;
@@ -903,9 +900,7 @@ h2 {
 /* --- Protokoll --------------------------------------------------------------- */
 
 .log {
-  /* Freie Hoehe (Fenster ist auf die Champ Select ausgelegt) sitzt ueber dem Protokoll. */
-  margin-top: auto;
-  padding-top: 18px;
+  margin-top: 18px;
 }
 
 .log-toggle {

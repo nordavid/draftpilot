@@ -15,7 +15,7 @@ import {
 } from '@shared/index'
 import { ChampionsContext, buildLookup, type ChampionLookup } from './champions'
 import { DICTS, I18nContext, LANGUAGE_NAME } from './i18n'
-import { fitAndShowWindow } from './api'
+import { fitWindow, showWindow } from './api'
 import { RoleIcon } from './components/RoleIcon'
 import { PriorityRow } from './components/PriorityRow'
 import { ChampionPicker } from './components/ChampionPicker'
@@ -44,21 +44,14 @@ function fmtTime(ts: number): string {
 
 type PickerState = { role: Role; kind: 'pick' | 'ban' } | null
 
-/** Mehrhoehe des Live-Panels gegenueber der Statuszeile (gemessen, inkl. Abstand). */
-const LIVE_PANEL_EXTRA = 88
-
 /** Hoehe, die die GUI ohne Scrollbalken braucht (Titelleiste + Inhalt + Rahmen). */
-function naturalHeight(): number {
+function naturalHeight(inner: HTMLElement): number {
   const titlebar = document.querySelector<HTMLElement>('.titlebar')
-  const content = document.querySelector<HTMLElement>('.content')
-  const log = document.querySelector<HTMLElement>('.log')
-  if (!titlebar || !content || !log) return 0
-  // Protokoll sitzt per margin-top:auto unten -> dessen Oberkante ohne Auto-Abstand messen.
-  const before = log.previousElementSibling as HTMLElement | null
-  const top = content.getBoundingClientRect().top
-  const above = before ? before.getBoundingClientRect().bottom - top + content.scrollTop : 0
-  const padding = parseFloat(getComputedStyle(content).paddingBottom)
-  return Math.ceil(titlebar.offsetHeight + above + log.offsetHeight + padding + 2)
+  const content = inner.parentElement
+  if (!titlebar || !content) return 0
+  const style = getComputedStyle(content)
+  const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+  return Math.ceil(titlebar.offsetHeight + padding + inner.offsetHeight + 2)
 }
 
 function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
@@ -114,17 +107,21 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
     return new Set([...prefs.picks, ...prefs.bans])
   }, [ui, picker])
 
-  // Fenster startet unsichtbar (kein weisser Blitz) und erscheint mit dem ersten Zustand -
-  // so hoch, dass auch die Champ Select ohne Scrollbalken passt.
+  // Fenster startet unsichtbar (kein weisser Blitz). Mit dem ersten Zustand: Hoehe auf den
+  // Inhalt bringen, zentrieren, zeigen. Danach folgt die Hoehe dem Inhalt (Champ Select,
+  // Protokoll ...) - kein leerer Platz, kein Scrollbalken.
   const ready = ui !== null
-  const inChampSelect = useRef(false)
-  inChampSelect.current = !!ui?.live
+  const innerRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
-    if (!ready) return
-    void document.fonts.ready.then(() => {
-      const extra = inChampSelect.current ? 0 : LIVE_PANEL_EXTRA
-      return fitAndShowWindow(naturalHeight() + extra)
+    const inner = innerRef.current
+    if (!ready || !inner) return
+    const observer = new ResizeObserver(() => void fitWindow(naturalHeight(inner)))
+    void document.fonts.ready.then(async () => {
+      await fitWindow(naturalHeight(inner), true)
+      await showWindow()
+      observer.observe(inner)
     })
+    return () => observer.disconnect()
   }, [ready])
 
   if (!ui) return <div className="boot" />
@@ -180,130 +177,112 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
           {ui.update && <UpdateNotice version={ui.update} onInstall={api.installUpdate} />}
 
           <main className="content">
-            {/* In der Champ Select ersetzt das Live-Panel die Statuszeile. */}
-            {ui.live ? (
-              <LivePanel live={ui.live} />
-            ) : (
-              <div className="status">
-                <span className={`status-conn ${connected ? 'is-ok' : 'is-wait'}`}>
-                  <span className="dot" aria-hidden />
-                  {connected ? t.connected : t.waiting}
-                </span>
-                {connected && ui.phase && (
-                  <span className="status-phase">{t.phase[ui.phase]}</span>
-                )}
-                {ui.summonerRiotId && <span className="status-summoner">{ui.summonerRiotId}</span>}
-              </div>
-            )}
-
-            {paused && <p className="paused-note">{t.pausedNote}</p>}
-
-            <section className="roles" aria-label={t.rolesLabel}>
-              <div className="role-tabs" role="tablist">
-                {ROLES.map((r) => {
-                  const p = ui.roles[r]
-                  const configured = p.picks.length + p.bans.length > 0
-                  return (
-                    <button
-                      type="button"
-                      role="tab"
-                      key={r}
-                      aria-selected={tab === r}
-                      className={`role-tab ${tab === r ? 'is-active' : ''} ${liveRole === r ? 'is-live' : ''}`}
-                      onClick={() => setTab(r)}
-                    >
-                      <RoleIcon role={r} size={22} />
-                      <span>{t.role[r]}</span>
-                      {configured && <span className="role-mark" aria-hidden />}
-                    </button>
-                  )
-                })}
-              </div>
-
-              <div className="role-body" role="tabpanel">
-                <div className="list-block">
-                  <div className="list-head">
-                    <h2>{t.picks}</h2>
-                    <span className="list-help">{t.picksHelp}</span>
-                  </div>
-                  <PriorityRow
-                    kind="pick"
-                    ids={prefs.picks}
-                    onChange={(picks) => setRole(tab, { ...prefs, picks })}
-                    onAdd={() => setPicker({ role: tab, kind: 'pick' })}
-                  />
-                </div>
-
-                <div className="list-block">
-                  <div className="list-head">
-                    <h2>{t.bans}</h2>
-                    <span className="list-help">{t.bansHelp}</span>
-                  </div>
-                  <PriorityRow
-                    kind="ban"
-                    ids={prefs.bans}
-                    onChange={(bans) => setRole(tab, { ...prefs, bans })}
-                    onAdd={() => setPicker({ role: tab, kind: 'ban' })}
-                  />
-                </div>
-              </div>
-            </section>
-
-            <section className="settings">
-              <div className="setting">
-                <div className="setting-text">
-                  <span>{t.autoAccept}</span>
-                </div>
-                <Switch
-                  checked={s.autoAccept}
-                  onChange={(v) => setSettings({ autoAccept: v })}
-                  label={t.autoAccept}
-                />
-              </div>
-              <div className="setting">
-                <div className="setting-text">
-                  <span>{t.autoPick}</span>
-                  <small>{t.autoPickHint}</small>
-                </div>
-                <Switch
-                  checked={s.autoPick}
-                  onChange={(v) => setSettings({ autoPick: v })}
-                  label={t.autoPick}
-                />
-              </div>
-              <div className="setting">
-                <div className="setting-text">
-                  <span>{t.autoBan}</span>
-                </div>
-                <Switch
-                  checked={s.autoBan}
-                  onChange={(v) => setSettings({ autoBan: v })}
-                  label={t.autoBan}
-                />
-              </div>
-              <div className="setting">
-                <div className="setting-text">
-                  <span>{t.confirm}</span>
-                  <small>
-                    {s.lockMode === 'auto-lock'
-                      ? t.confirmAuto(Math.round(s.lockThresholdMs / 1000))
-                      : t.confirmHover}
-                  </small>
-                </div>
-                <div className="setting-controls">
-                  {s.lockMode === 'auto-lock' && (
-                    <Stepper
-                      label={t.lockTime}
-                      lessLabel={t.less}
-                      moreLabel={t.more}
-                      value={s.lockThresholdMs}
-                      min={LOCK_THRESHOLD_MIN_MS}
-                      max={LOCK_THRESHOLD_MAX_MS}
-                      step={1000}
-                      format={(v) => `${Math.round(v / 1000)} s`}
-                      onChange={(v) => setSettings({ lockThresholdMs: v })}
-                    />
+            <div className="content-inner" ref={innerRef}>
+              {/* In der Champ Select ersetzt das Live-Panel die Statuszeile. */}
+              {ui.live ? (
+                <LivePanel live={ui.live} />
+              ) : (
+                <div className="status">
+                  <span className={`status-conn ${connected ? 'is-ok' : 'is-wait'}`}>
+                    <span className="dot" aria-hidden />
+                    {connected ? t.connected : t.waiting}
+                  </span>
+                  {connected && ui.phase && (
+                    <span className="status-phase">{t.phase[ui.phase]}</span>
                   )}
+                  {ui.summonerRiotId && <span className="status-summoner">{ui.summonerRiotId}</span>}
+                </div>
+              )}
+
+              {paused && <p className="paused-note">{t.pausedNote}</p>}
+
+              <section className="roles" aria-label={t.rolesLabel}>
+                <div className="role-tabs" role="tablist">
+                  {ROLES.map((r) => {
+                    const p = ui.roles[r]
+                    const configured = p.picks.length + p.bans.length > 0
+                    return (
+                      <button
+                        type="button"
+                        role="tab"
+                        key={r}
+                        aria-selected={tab === r}
+                        className={`role-tab ${tab === r ? 'is-active' : ''} ${liveRole === r ? 'is-live' : ''}`}
+                        onClick={() => setTab(r)}
+                      >
+                        <RoleIcon role={r} size={22} />
+                        <span>{t.role[r]}</span>
+                        {configured && <span className="role-mark" aria-hidden />}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="role-body" role="tabpanel">
+                  <div className="list-block">
+                    <div className="list-head">
+                      <h2>{t.picks}</h2>
+                      <span className="list-help">{t.picksHelp}</span>
+                    </div>
+                    <PriorityRow
+                      kind="pick"
+                      ids={prefs.picks}
+                      onChange={(picks) => setRole(tab, { ...prefs, picks })}
+                      onAdd={() => setPicker({ role: tab, kind: 'pick' })}
+                    />
+                  </div>
+
+                  <div className="list-block">
+                    <div className="list-head">
+                      <h2>{t.bans}</h2>
+                      <span className="list-help">{t.bansHelp}</span>
+                    </div>
+                    <PriorityRow
+                      kind="ban"
+                      ids={prefs.bans}
+                      onChange={(bans) => setRole(tab, { ...prefs, bans })}
+                      onAdd={() => setPicker({ role: tab, kind: 'ban' })}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section className="settings">
+                <div className="setting">
+                  <div className="setting-text">
+                    <span>{t.autoAccept}</span>
+                  </div>
+                  <Switch
+                    checked={s.autoAccept}
+                    onChange={(v) => setSettings({ autoAccept: v })}
+                    label={t.autoAccept}
+                  />
+                </div>
+                <div className="setting">
+                  <div className="setting-text">
+                    <span>{t.autoPick}</span>
+                  </div>
+                  <Switch
+                    checked={s.autoPick}
+                    onChange={(v) => setSettings({ autoPick: v })}
+                    label={t.autoPick}
+                  />
+                </div>
+                <div className="setting">
+                  <div className="setting-text">
+                    <span>{t.autoBan}</span>
+                  </div>
+                  <Switch
+                    checked={s.autoBan}
+                    onChange={(v) => setSettings({ autoBan: v })}
+                    label={t.autoBan}
+                  />
+                </div>
+                <div className="setting">
+                  <div className="setting-text">
+                    <span>{t.confirm}</span>
+                    <small>{s.lockMode === 'auto-lock' ? t.confirmAuto : t.confirmHover}</small>
+                  </div>
                   <Segmented
                     label={t.confirm}
                     value={s.lockMode}
@@ -314,44 +293,62 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
                     onChange={(v) => setSettings({ lockMode: v })}
                   />
                 </div>
-              </div>
-              <div className="setting">
-                <div className="setting-text">
-                  <span>{t.language}</span>
+                <div className="setting">
+                  <div className="setting-text">
+                    <span>{t.lockTime}</span>
+                    <small>{t.lockTimeHint}</small>
+                  </div>
+                  <Stepper
+                    label={t.lockTime}
+                    lessLabel={t.less}
+                    moreLabel={t.more}
+                    value={s.lockThresholdMs}
+                    min={LOCK_THRESHOLD_MIN_MS}
+                    max={LOCK_THRESHOLD_MAX_MS}
+                    step={1000}
+                    format={(v) => `${Math.round(v / 1000)} s`}
+                    onChange={(v) => setSettings({ lockThresholdMs: v })}
+                    disabled={s.lockMode !== 'auto-lock'}
+                  />
                 </div>
-                <Segmented
-                  label={t.language}
-                  value={s.language}
-                  options={LANGUAGES.map((l) => ({ value: l, label: LANGUAGE_NAME[l] }))}
-                  onChange={(v) => setSettings({ language: v })}
-                />
-              </div>
-            </section>
+                <div className="setting">
+                  <div className="setting-text">
+                    <span>{t.language}</span>
+                  </div>
+                  <Segmented
+                    label={t.language}
+                    value={s.language}
+                    options={LANGUAGES.map((l) => ({ value: l, label: LANGUAGE_NAME[l] }))}
+                    onChange={(v) => setSettings({ language: v })}
+                  />
+                </div>
+              </section>
 
-            <section className="log">
-              <button
-                type="button"
-                className="log-toggle"
-                aria-expanded={showLog}
-                onClick={() => setShowLog((v) => !v)}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
-                  <path d="M3 2l3.5 3L3 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                </svg>
-                {t.log}
-              </button>
-              {showLog && (
-                <div className="log-list" ref={logRef}>
-                  {logs.length === 0 && <div className="log-line">{t.logEmpty}</div>}
-                  {logs.map((l, i) => (
-                    <div key={i} className={`log-line lv-${l.level}`}>
-                      <time>{fmtTime(l.ts)}</time>
-                      <span>{l.message}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+              <section className="log">
+                <button
+                  type="button"
+                  className="log-toggle"
+                  aria-expanded={showLog}
+                  onClick={() => setShowLog((v) => !v)}
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+                    <path d="M3 2l3.5 3L3 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                  {t.log}
+                </button>
+                {showLog && (
+                  <div className="log-list" ref={logRef}>
+                    {logs.length === 0 && <div className="log-line">{t.logEmpty}</div>}
+                    {logs.map((l, i) => (
+                      <div key={i} className={`log-line lv-${l.level}`}>
+                        <time>{fmtTime(l.ts)}</time>
+                        <span>{l.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
           </main>
 
           {picker && (
