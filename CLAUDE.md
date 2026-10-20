@@ -37,12 +37,12 @@ Gold = Auswahl/Erstwahl, Rot `#e84057` = Ban. Eigene Titelleiste (`decorations: 
 `data-tauri-drag-region`, `WindowControls.tsx`). Texte kurz halten, keine Tooltips.
 In der Champ Select ersetzt das Live-Panel die Statuszeile.
 
-Fenster startet `visible: false` + `backgroundColor` (kein weißer Blitz). Das Frontend misst
-mit dem ersten Zustand die nötige Höhe (`naturalHeight` + `LIVE_PANEL_EXTRA`, damit auch die
-Champ Select ohne Scrollbalken passt), setzt sie (begrenzt durch `screen.availHeight`),
-zentriert und zeigt das Fenster (`fitAndShowWindow`); Rust zeigt es nach 3 s als
-Sicherheitsnetz. Freie Höhe außerhalb der Champ Select sitzt über dem Protokoll
-(`.log { margin-top: auto }`). Neue Elemente -> `LIVE_PANEL_EXTRA`/Messung prüfen.
+Fenster startet `visible: false` + `backgroundColor` (kein weißer Blitz). Die Fensterhöhe
+**folgt immer dem Inhalt** (`.content-inner` + ResizeObserver -> `fitWindow` in `api.ts`):
+beim Start einpassen, zentrieren, zeigen; danach wächst/schrumpft es mit Live-Panel und
+Protokoll, begrenzt durch `screen.availHeight`, rückt nach oben statt unten herauszuragen.
+Kein Vorhalten von Platz (der Nutzer will keinen Leerraum). Rust zeigt das Fenster nach 3 s
+als Sicherheitsnetz.
 `dragDropEnabled: false` ist Pflicht, sonst schluckt Tauri unter Windows HTML5-Drag&Drop.
 
 ## Struktur

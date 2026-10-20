@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { LogicalSize } from '@tauri-apps/api/dpi'
+import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi'
 import type { DraftpilotApi } from '@shared/index'
 
 // Backend-Anbindung: in Tauri ueber Befehle + Events (Rust: src-tauri/src/app.rs).
@@ -40,22 +40,34 @@ export async function loadApi(): Promise<DraftpilotApi> {
   return mockApi
 }
 
-const MIN_HEIGHT = 620
+const MIN_HEIGHT = 420
 
-/** Das Fenster startet unsichtbar (dunkler Hintergrund). Sobald die GUI steht: auf die
- *  gemessene Hoehe bringen (begrenzt durch den Bildschirm), zentrieren, einblenden. */
-export async function fitAndShowWindow(height: number): Promise<void> {
-  if (!isTauri) return
+/** Fensterhoehe auf den Inhalt bringen (begrenzt durch den Bildschirm). Waechst das Fenster
+ *  ueber den unteren Rand, rueckt es nach oben. `center` nur beim ersten Anzeigen. */
+export async function fitWindow(height: number, center = false): Promise<void> {
+  if (!isTauri || height <= 0) return
   const win = getCurrentWindow()
   try {
-    const max = window.screen.availHeight - 24
-    const target = Math.round(Math.min(Math.max(height, MIN_HEIGHT), max))
-    if (Math.abs(target - window.innerHeight) > 2) {
+    const { availTop, availHeight } = window.screen as Screen & { availTop: number }
+    const target = Math.round(Math.min(Math.max(height, MIN_HEIGHT), availHeight - 16))
+    if (Math.abs(target - window.innerHeight) > 1) {
       await win.setSize(new LogicalSize(window.innerWidth, target))
+    }
+    if (center) {
       await win.center()
+      return
+    }
+    const overflow = window.screenY + target - (availTop + availHeight)
+    if (overflow > 0) {
+      const y = Math.max(availTop, window.screenY - overflow)
+      await win.setPosition(new LogicalPosition(window.screenX, y))
     }
   } catch {
-    // Groesse ist Kosmetik - Hauptsache, das Fenster erscheint.
+    // Groesse ist Kosmetik - Hauptsache, das Fenster ist da.
   }
-  await win.show()
+}
+
+/** Das Fenster startet unsichtbar (dunkler Hintergrund); nach dem Einpassen einblenden. */
+export async function showWindow(): Promise<void> {
+  if (isTauri) await getCurrentWindow().show()
 }
