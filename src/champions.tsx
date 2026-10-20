@@ -45,7 +45,7 @@ export function Portrait(props: {
   if (props.id === RANDOM_PICK) {
     return (
       <span className={`${cls} portrait-random`} style={style} aria-hidden>
-        <Dice size={Math.round(props.size * 0.48)} />
+        <Dice size={Math.round(props.size * 0.74)} />
       </span>
     )
   }
@@ -77,15 +77,15 @@ export function Portrait(props: {
 function Dice(props: { size: number }): React.JSX.Element {
   return (
     <svg width={props.size} height={props.size} viewBox="0 0 24 24" aria-hidden>
-      <rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="2" y="2" width="20" height="20" rx="3" fill="none" stroke="currentColor" strokeWidth="1.4" />
       {[
-        [8, 8],
-        [16, 8],
+        [7.5, 7.5],
+        [16.5, 7.5],
         [12, 12],
-        [8, 16],
-        [16, 16]
+        [7.5, 16.5],
+        [16.5, 16.5]
       ].map(([cx, cy]) => (
-        <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.6" fill="currentColor" />
+        <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.9" fill="currentColor" />
       ))}
     </svg>
   )

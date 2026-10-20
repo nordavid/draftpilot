@@ -32,12 +32,13 @@ export interface LogEntry {
 // --- Rollen & Praeferenzen ---------------------------------------------------
 
 /**
- * Rollen-Schluessel = LCU-`assignedPosition`-Werte. `none` greift, wenn der Client
- * keine Rolle zuweist (Blind Pick, Normal ohne Rollenwahl).
+ * Rollen-Schluessel = LCU-`assignedPosition`-Werte. `none` = keine Rolle zugewiesen
+ * (Arena, Custom Games): dann bleibt Draftpilot beim Picken/Bannen passiv.
  */
 export type Role = 'top' | 'jungle' | 'middle' | 'bottom' | 'utility' | 'none'
 
-export const ROLES: readonly Role[] = ['top', 'jungle', 'middle', 'bottom', 'utility', 'none']
+/** Rollen mit eigenen Listen (Tabs). */
+export const ROLES: readonly Role[] = ['top', 'jungle', 'middle', 'bottom', 'utility']
 
 /** Maximale Laenge je Pick-/Ban-Liste (Erstwahl + Fallbacks). */
 export const MAX_LIST = 6

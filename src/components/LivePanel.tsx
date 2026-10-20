@@ -90,10 +90,14 @@ export function LivePanel(props: { live: LiveView }): React.JSX.Element {
           {t.role[live.role]}
         </span>
       </div>
-      <div className="live-lanes">
-        <Lane kind="pick" view={live.pick} now={now} />
-        <Lane kind="ban" view={live.ban} now={now} />
-      </div>
+      {live.role === 'none' ? (
+        <p className="live-note">{t.noRole}</p>
+      ) : (
+        <div className="live-lanes">
+          <Lane kind="pick" view={live.pick} now={now} />
+          <Lane kind="ban" view={live.ban} now={now} />
+        </div>
+      )}
     </section>
   )
 }

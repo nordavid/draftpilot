@@ -25,7 +25,7 @@ ursprünglich aus dem A2Z Companion (`../a2z-companion`, TypeScript) und wurde n
   den aktuellen Patch abgeglichen, je Sprache gecacht; Fallback ohne Internet: LCU
   `champion-summary.json` (ohne Icons).
 - Rollen-Icons: Original-Pfade aus `rcp-fe-lol-static-assets` (CommunityDragon) inline in
-  `src/components/RoleIcon.tsx`; „Fill" (Liste `none`/„Blind") nachgezeichnet.
+  `src/components/RoleIcon.tsx` (nur die fünf Lanes; der frühere „Blind"-Tab ist seit 2.3.0 weg).
 - **Keine GitHub Actions anlegen.**
 
 ## Optik
@@ -37,8 +37,12 @@ Gold = Auswahl/Erstwahl, Rot `#e84057` = Ban. Eigene Titelleiste (`decorations: 
 `data-tauri-drag-region`, `WindowControls.tsx`). Texte kurz halten, keine Tooltips.
 In der Champ Select ersetzt das Live-Panel die Statuszeile.
 
-Fenster startet `visible: false` + `backgroundColor` (kein weißer Blitz); das Frontend zeigt
-es mit dem ersten Zustand (`showWindow`), Rust nach 3 s als Sicherheitsnetz.
+Fenster startet `visible: false` + `backgroundColor` (kein weißer Blitz). Das Frontend misst
+mit dem ersten Zustand die nötige Höhe (`naturalHeight` + `LIVE_PANEL_EXTRA`, damit auch die
+Champ Select ohne Scrollbalken passt), setzt sie (begrenzt durch `screen.availHeight`),
+zentriert und zeigt das Fenster (`fitAndShowWindow`); Rust zeigt es nach 3 s als
+Sicherheitsnetz. Freie Höhe außerhalb der Champ Select sitzt über dem Protokoll
+(`.log { margin-top: auto }`). Neue Elemente -> `LIVE_PANEL_EXTRA`/Messung prüfen.
 `dragDropEnabled: false` ist Pflicht, sonst schluckt Tauri unter Windows HTML5-Drag&Drop.
 
 ## Struktur
@@ -63,7 +67,9 @@ src/shared/index.ts  TS-Spiegel von model.rs
 
 ## Champ-Select-Engine (Kernregeln)
 
-- **Rolle** aus `myTeam[me].assignedPosition`; leer -> Liste `none` (GUI: „Blind").
+- **Rolle** aus `myTeam[me].assignedPosition`. Leer (nur noch Arena/Custom Games – alle
+  Standard-Queues weisen Rollen zu) -> Picken/Bannen bleibt manuell; Live-Panel zeigt das.
+  `none` bleibt im Datenmodell nur für alte Konfigurationen.
 - **Pick-Ziel:** erster Champion der Rollenliste, der nicht gebannt/gelockt ist, pickbar
   (`pickable-champion-ids`) und nicht von einem Teammate beansprucht wird (Pick-Intent,
   Auswahl, Hover). Wer zuerst hovert, behält ihn (kein Ping-Pong).
@@ -79,7 +85,7 @@ src/shared/index.ts  TS-Spiegel von model.rs
 - **Zufall** (`RANDOM_PICK = -1` in der Pick-Liste, GUI: Würfel): eigener (`pickable`)
   Champion, den Riot für die Rolle empfiehlt (LCU `/lol-perks/v1/recommended-champion-positions`,
   je Champ Select gecacht), nicht weg, nicht von Mates beansprucht, nicht auf der eigenen
-  Banliste. Blind: alle eigenen. Die Wahl bleibt stabil (`Track.random`) und wird nur neu
+  Banliste. Die Wahl bleibt stabil (`Track.random`) und wird nur neu
   gewürfelt, wenn sie nicht mehr geht. Ohne Positionsdaten -> kein Zufall (kein Janna-Jungle).
 - **Neubewertung ~1×/s auch ohne Event** (Events kommen unregelmäßig, im Solo-Custom gar
   nicht). Der Timer rechnet deshalb ab Empfang des Events (`session_at`), nie ab Auswertung.

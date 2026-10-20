@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { LogicalSize } from '@tauri-apps/api/dpi'
 import type { DraftpilotApi } from '@shared/index'
 
 // Backend-Anbindung: in Tauri ueber Befehle + Events (Rust: src-tauri/src/app.rs).
@@ -39,8 +40,22 @@ export async function loadApi(): Promise<DraftpilotApi> {
   return mockApi
 }
 
-/** Das Fenster startet unsichtbar (dunkler Hintergrund); sobald die GUI steht, einblenden.
- *  Kein requestAnimationFrame: in einem unsichtbaren WebView kann rAF pausieren. */
-export function showWindow(): void {
-  if (isTauri) void getCurrentWindow().show()
+const MIN_HEIGHT = 620
+
+/** Das Fenster startet unsichtbar (dunkler Hintergrund). Sobald die GUI steht: auf die
+ *  gemessene Hoehe bringen (begrenzt durch den Bildschirm), zentrieren, einblenden. */
+export async function fitAndShowWindow(height: number): Promise<void> {
+  if (!isTauri) return
+  const win = getCurrentWindow()
+  try {
+    const max = window.screen.availHeight - 24
+    const target = Math.round(Math.min(Math.max(height, MIN_HEIGHT), max))
+    if (Math.abs(target - window.innerHeight) > 2) {
+      await win.setSize(new LogicalSize(window.innerWidth, target))
+      await win.center()
+    }
+  } catch {
+    // Groesse ist Kosmetik - Hauptsache, das Fenster erscheint.
+  }
+  await win.show()
 }
