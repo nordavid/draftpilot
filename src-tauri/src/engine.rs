@@ -1,16 +1,16 @@
-//! Champ-Select-Engine. Reagiert auf jedes /lol-champ-select/v1/session-Event:
-//!  - Rolle aus `assignedPosition` bestimmen (leer, z. B. Arena/Custom -> passiv bleiben),
-//!  - Pick: ersten verfuegbaren Champion der Rollen-Pickliste hovern (in der Planning-Phase
-//!    schon vorab) und kurz vor Ablauf der eigenen Pick-Action locken,
-//!  - Ban: ersten erlaubten Champion der Rollen-Banliste hovern und kurz vor Ablauf bannen.
-//!    Nie bannen, was ein Teammate (oder wir selbst) picken will.
+//! Champ select engine. Reacts to every /lol-champ-select/v1/session event:
+//!  - determine the role from `assignedPosition` (empty, e.g. Arena/custom -> stay idle),
+//!  - pick: hover the first available champion of the role's pick list (already during
+//!    the planning phase) and lock it shortly before our pick action's timer ends,
+//!  - ban: hover the first allowed champion of the role's ban list and ban it shortly
+//!    before the timer ends. Never ban what a teammate (or we ourselves) want to pick.
 //!
-//! Der echte Pick des Nutzers hat IMMER Vorrang: Die Engine merkt sich jeden Champion, den
-//! sie selbst in eine Action geschrieben hat. Steht dort ein anderer, war es der Nutzer ->
-//! Automatik fuer diese Action in dieser Champ Select pausieren (kein Hover, kein Lock).
+//! The user's own pick ALWAYS wins: the engine remembers every champion it wrote into an
+//! action. If a different one shows up there, the user chose it -> automation for that
+//! action pauses for the rest of this champ select (no hover, no lock).
 //!
-//! Alle Methoden laufen ueber `&mut self` in einer einzigen Task -> LCU-Schreibzugriffe
-//! sind automatisch serialisiert (kein Doppel-Lock, kein Hover-Race).
+//! All methods run through `&mut self` in a single task -> LCU writes are serialized
+//! automatically (no double lock, no hover race).
 
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
@@ -27,23 +27,23 @@ use crate::model::{
 use crate::state::Shared;
 
 const PICKABLE_PATH: &str = "/lol-champ-select/v1/pickable-champion-ids";
-/// Riots empfohlene Positionen je Champion (Grundlage fuer "Zufall": kein Janna-Jungle).
+/// Riot's recommended positions per champion (basis for "Random": no Janna jungle).
 const POSITIONS_PATH: &str = "/lol-perks/v1/recommended-champion-positions";
 const ACTIONS_PATH: &str = "/lol-champ-select/v1/session/actions";
-/// Draft-Declare-Phase: Pick-Absicht darf gehovert, aber nichts gelockt/gebannt werden.
+/// Draft declare phase: the pick intent may be hovered, but nothing locked or banned.
 const PLANNING: &str = "PLANNING";
-/// Echte Ban-/Pick-Runde. In PLANNING ist die Ban-Action zwar schon "isInProgress",
-/// ein Complete waere dort aber wirkungslos -> Bans nur in dieser Phase.
+/// The actual ban/pick round. In PLANNING the ban action is already "isInProgress",
+/// but completing it there has no effect -> bans only in this phase.
 const BAN_PICK: &str = "BAN_PICK";
-/// Auch ohne neues Event regelmaessig neu bewerten: Session-Events kommen unregelmaessig
-/// (allein im Custom Game z. B. gar nicht mehr), und pickable-/bannable-Listen sind beim
-/// Phasenwechsel teils noch leer.
+/// Re-evaluate regularly even without new events: session events arrive irregularly (alone
+/// in a custom game, not at all), and pickable/bannable lists can still be empty right after
+/// a phase change.
 const REEVALUATE_MS: i64 = 1000;
 
-// --- LCU-Zugriff (abstrahiert fuer Tests) -----------------------------------
+// --- LCU access (abstracted for tests) ---------------------------------------
 
 pub trait LcuApi: Send + Sync + 'static {
-    /// GET -> (Status, JSON) oder None bei Verbindungsfehler.
+    /// GET -> (status, JSON) or None on a connection error.
     fn get_json(&self, path: &str) -> impl Future<Output = Option<(u16, Value)>> + Send;
     fn patch_action(
         &self,
@@ -53,7 +53,7 @@ pub trait LcuApi: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), String>> + Send;
 }
 
-/// Echte LCU ueber die aktive Verbindung.
+/// Real LCU over the active connection.
 pub struct LiveLcu(pub LcuHandle);
 
 impl LcuApi for LiveLcu {
@@ -77,7 +77,7 @@ impl LcuApi for LiveLcu {
     }
 }
 
-// --- Session-Modell (defensiv: fehlende Felder -> Default) -------------------
+// --- Session model (defensive: missing fields -> default) --------------------
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
 #[serde(rename_all = "camelCase", default)]
@@ -125,7 +125,7 @@ pub struct Session {
 }
 
 impl Session {
-    /// Nur echte Sessions (Zelle + Actions vorhanden) akzeptieren.
+    /// Accept only real sessions (cell and actions present).
     pub fn parse(data: &Value) -> Option<Session> {
         data.get("localPlayerCellId")?.as_i64()?;
         data.get("actions")?.as_array()?;
@@ -140,7 +140,7 @@ impl Session {
         self.actions.iter().flatten()
     }
 
-    /// Eigene Action eines Typs: aktive zuerst, dann naechste offene, sonst die letzte erledigte.
+    /// Our own action of a type: the active one first, then the next open one, else the last done.
     fn own_action(&self, kind: Kind) -> Option<&Action> {
         let mut open = None;
         let mut done = None;
@@ -160,7 +160,7 @@ impl Session {
         open.or(done)
     }
 
-    /// Bereits gebannte oder gelockte Champions (beide Teams).
+    /// Champions already banned or locked in (both teams).
     fn unavailable(&self) -> HashSet<i64> {
         let mut set: HashSet<i64> = self
             .all_actions()
@@ -175,8 +175,8 @@ impl Session {
         self.my_team.iter().any(|p| p.cell_id == cell)
     }
 
-    /// Champions, die Teammates (ohne uns) picken wollen: Pick-Absicht aus der Planning-Phase,
-    /// aktuelle Auswahl und Hover in ihren Pick-Actions.
+    /// Champions teammates (not us) want to pick: pick intent from the planning phase,
+    /// current selection and hovers in their pick actions.
     fn teammate_claims(&self) -> HashSet<i64> {
         let me = self.me();
         let mut claims = HashSet::new();
@@ -196,7 +196,7 @@ impl Session {
         claims
     }
 
-    /// Was Teammates gerade zum Bannen hovern (fuer "keine Doppel-Bans").
+    /// What teammates are currently hovering to ban (to avoid double bans).
     fn ally_ban_hovers(&self) -> HashSet<i64> {
         let me = self.me();
         self.all_actions()
@@ -214,7 +214,7 @@ impl Session {
     }
 }
 
-// --- Automatik-Zustand je Action --------------------------------------------
+// --- Automation state per action ---------------------------------------------
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Kind {
@@ -242,24 +242,24 @@ struct Track {
     kind: Kind,
     action_id: Option<i64>,
     target: Option<i64>,
-    /// Alle Champions, die WIR in diese Action geschrieben haben (Hover/Lock).
+    /// Every champion WE wrote into this action (hover/lock).
     writes: HashSet<i64>,
-    /// Nutzer hat selbst gewaehlt -> Automatik fuer diese Action pausiert.
+    /// The user chose manually -> automation for this action is paused.
     manual: bool,
-    /// Wir haben die Action abgeschlossen (bzw. es laeuft gerade ein Versuch).
+    /// We completed the action (or an attempt is in flight).
     locked: bool,
-    /// Timer-Snapshot fuer die zeitbasierte Lock-Entscheidung.
+    /// Timer snapshot for the time-based lock decision.
     time_left_ms: f64,
     time_left_at: i64,
     view: Option<ActionView>,
-    // Log-Dedup
+    // Log de-duplication
     logged_target: Option<i64>,
     logged_none: bool,
     logged_unavailable: HashSet<i64>,
     last_error: Option<String>,
-    /// Champions, die der Client beim Hovern abgelehnt hat -> naechsten Kandidaten nehmen.
+    /// Champions the client refused when hovering -> use the next candidate.
     rejected: HashSet<i64>,
-    /// Gewuerfelter Champion fuer den Zufalls-Eintrag (bleibt stabil, solange er geht).
+    /// Rolled champion for the random entry (stays stable while it remains available).
     random: Option<i64>,
     logged_no_random: bool,
 }
@@ -286,7 +286,7 @@ impl Track {
         }
     }
 
-    /// Neue Action (andere ID) -> frischer Zustand.
+    /// New action (different ID) -> fresh state.
     fn bind(&mut self, action_id: i64) {
         if self.action_id != Some(action_id) {
             *self = Track::new(self.kind);
@@ -303,7 +303,7 @@ impl Track {
     }
 }
 
-// --- Engine ------------------------------------------------------------------
+// --- Engine -------------------------------------------------------------------
 
 pub type NameFn = Arc<dyn Fn(i64) -> String + Send + Sync>;
 
@@ -314,14 +314,14 @@ pub struct Engine<L: LcuApi> {
     name_of: NameFn,
     active: bool,
     session: Option<Session>,
-    /// Empfangszeit (epoch ms) der Session -> Basis fuer die Timer-Fortrechnung.
+    /// Arrival time (epoch ms) of the session -> basis for the running timer.
     session_at: i64,
     last_evaluation: i64,
     role: Option<Role>,
     pick: Track,
     ban: Track,
     announced_passive: bool,
-    /// Empfohlene Positionen je Champion-ID (pro Champ Select einmal aus der LCU geladen).
+    /// Recommended positions per champion ID (loaded from the LCU once per champ select).
     positions: Option<HashMap<i64, Vec<String>>>,
 }
 
@@ -344,7 +344,7 @@ impl<L: LcuApi> Engine<L> {
         }
     }
 
-    /// Neues Session-Event (None = Champ Select vorbei / Verbindung weg).
+    /// New session event (None = champ select over / connection lost).
     pub async fn on_session(&mut self, data: Option<Value>) {
         match data.as_ref().and_then(Session::parse) {
             Some(session) => {
@@ -360,7 +360,7 @@ impl<L: LcuApi> Engine<L> {
         }
     }
 
-    /// Tool waehrend laufender Champ Select gestartet: einmalig den Ist-Stand holen.
+    /// Started during a running champ select: fetch the current state once.
     pub async fn fetch_initial(&mut self) {
         if let Some((200, data)) = self.lcu.get_json(CHAMP_SELECT_SESSION_URI).await {
             if Session::parse(&data).is_some() {
@@ -369,15 +369,15 @@ impl<L: LcuApi> Engine<L> {
         }
     }
 
-    /// Nach Aenderung von Einstellungen/Listen sofort neu bewerten.
+    /// Re-evaluate right away after settings or lists changed.
     pub async fn refresh(&mut self) {
         if self.active {
             self.evaluate().await;
         }
     }
 
-    /// Timer fortrechnen (Events feuern nicht kontinuierlich) -> ggf. locken/bannen;
-    /// etwa jede Sekunde komplett neu bewerten.
+    /// Advance the timer (events don't fire continuously) -> lock/ban when due;
+    /// fully re-evaluate about once per second.
     pub async fn tick(&mut self) {
         if !self.active {
             return;
@@ -410,8 +410,8 @@ impl<L: LcuApi> Engine<L> {
         format!("{} ({id})", (self.name_of)(id))
     }
 
-    /// pickable-IDs. None = unbekannt (Fehler oder leere Liste: der Client fuellt sie beim
-    /// Phasenwechsel teils verspaetet).
+    /// Pickable IDs. None = unknown (error or empty list: the client sometimes fills it late
+    /// after a phase change).
     async fn fetch_ids(&self, path: &str) -> Option<HashSet<i64>> {
         match self.lcu.get_json(path).await {
             Some((200, Value::Array(list))) if !list.is_empty() => {
@@ -440,7 +440,7 @@ impl<L: LcuApi> Engine<L> {
                 self.log.info(format!("Role: {}.", role.key()));
             }
         }
-        // Alle Standard-Queues weisen eine Rolle zu; ohne Rolle nichts automatisieren.
+        // All standard queues assign a role; without one, automate nothing.
         if role == Role::None {
             self.pick.view = None;
             self.ban.view = None;
@@ -454,7 +454,7 @@ impl<L: LcuApi> Engine<L> {
             self.announced_passive = true;
         }
 
-        // Pick zuerst: der Pick-Kandidat fliesst in die Ban-Ausschluesse ein.
+        // Pick first: the pick candidate feeds into the ban exclusions.
         let mut pick = std::mem::replace(&mut self.pick, Track::new(Kind::Pick));
         self.evaluate_pick(&session, &mut pick, role, &prefs).await;
         self.pick = pick;
@@ -464,8 +464,8 @@ impl<L: LcuApi> Engine<L> {
         self.publish();
     }
 
-    /// Gemeinsamer Teil fuer Pick und Ban: Action binden, erledigte/manuelle Faelle
-    /// abhandeln. Liefert die offene Action, wenn die Automatik weitermachen darf.
+    /// Shared part of pick and ban: bind the action, handle done/manual cases. Returns the
+    /// open action if automation may continue.
     fn prepare(&self, session: &Session, t: &mut Track, list: &[i64]) -> Option<Action> {
         let Some(action) = session.own_action(t.kind).cloned() else {
             t.view = None;
@@ -485,7 +485,7 @@ impl<L: LcuApi> Engine<L> {
             return None;
         }
 
-        // Manuelle Wahl: ein echter Champion in der Action, den wir nie geschrieben haben.
+        // Manual choice: a real champion in the action that we never wrote.
         let live = action.champion_id;
         if !t.manual && live > 0 && !t.writes.contains(&live) {
             t.manual = true;
@@ -508,7 +508,7 @@ impl<L: LcuApi> Engine<L> {
         Some(action)
     }
 
-    /// Ziel gefunden/geaendert bzw. keins verfuegbar -> einmalig loggen.
+    /// Target found/changed or none available -> log once.
     fn note_target(&self, t: &mut Track, target: Option<i64>) {
         t.target = target;
         match target {
@@ -538,7 +538,7 @@ impl<L: LcuApi> Engine<L> {
         }
     }
 
-    /// Schreibt einen Hover in die Action (merkt ihn als unseren, bevor das Echo eintrifft).
+    /// Writes a hover into the action (records it as ours before the echo arrives).
     async fn hover(&mut self, t: &mut Track, action: &Action, target: i64) -> bool {
         if action.champion_id == target {
             return true;
@@ -546,7 +546,7 @@ impl<L: LcuApi> Engine<L> {
         t.writes.insert(target);
         match self.lcu.patch_action(action.id, target, false).await {
             Ok(()) => {
-                // Lokalen Stand sofort nachziehen, damit der Lock nicht auf das Echo wartet.
+                // Update the local state right away so the lock doesn't wait for the echo.
                 if let Some(session) = self.session.as_mut() {
                     session.set_action_champion(action.id, target);
                 }
@@ -556,7 +556,7 @@ impl<L: LcuApi> Engine<L> {
                 true
             }
             Err(err) => {
-                // Vom Client abgelehnt (HTTP-Fehler) -> diesen Champion ueberspringen.
+                // Refused by the client (HTTP error) -> skip this champion.
                 if err.starts_with("HTTP ") {
                     t.rejected.insert(target);
                 }
@@ -575,7 +575,7 @@ impl<L: LcuApi> Engine<L> {
         let list = &prefs.picks;
         let Some(action) = self.prepare(session, t, list) else { return };
 
-        // Verfuegbarkeit unklar -> im Zweifel nichts tun.
+        // Availability unknown -> when in doubt, do nothing.
         let Some(pickable) = self.fetch_ids(PICKABLE_PATH).await else {
             if t.view.is_none() {
                 t.set_view(ActionStatus::Waiting, None);
@@ -588,7 +588,7 @@ impl<L: LcuApi> Engine<L> {
         let mut target = None;
         for &c in list {
             if c == RANDOM_PICK {
-                // Zufall: eigener, zur Rolle passender Champion, den sonst niemand will.
+                // Random: an owned champion that fits the role and nobody else wants.
                 let held = action.champion_id;
                 let rejected = t.rejected.clone();
                 let ok = |id: i64| {
@@ -607,7 +607,7 @@ impl<L: LcuApi> Engine<L> {
             if unavailable.contains(&c) || t.rejected.contains(&c) {
                 continue;
             }
-            // Wer zuerst hovert, behaelt ihn: einen Champ, den wir schon halten, nicht abgeben.
+            // First to hover keeps it: don't give up a champion we already hold.
             if claims.contains(&c) && action.champion_id != c {
                 self.note_skipped(t, c, "a teammate wants to play it");
                 continue;
@@ -628,14 +628,14 @@ impl<L: LcuApi> Engine<L> {
         let our_turn = action.is_in_progress;
         let planning = session.timer.phase == PLANNING;
         if !our_turn && !planning {
-            t.set_view(ActionStatus::Waiting, Some(target)); // z. B. waehrend der Ban-Phase
+            t.set_view(ActionStatus::Waiting, Some(target)); // e.g. during the ban phase
             return;
         }
         if !self.hover(t, &action, target).await {
             return;
         }
         if !our_turn {
-            t.set_view(ActionStatus::Waiting, Some(target)); // Pre-Hover in der Planning-Phase
+            t.set_view(ActionStatus::Waiting, Some(target)); // pre-hover in the planning phase
             return;
         }
         t.time_left_ms = session.timer.adjusted_time_left_in_phase;
@@ -644,7 +644,7 @@ impl<L: LcuApi> Engine<L> {
         self.maybe_lock(t).await;
     }
 
-    /// Empfohlene Positionen aus der LCU (gecacht je Champ Select; None bei Fehler).
+    /// Recommended positions from the LCU (cached per champ select; None on error).
     async fn positions(&mut self) -> Option<&HashMap<i64, Vec<String>>> {
         if self.positions.is_none() {
             let Some((200, Value::Object(map))) = self.lcu.get_json(POSITIONS_PATH).await else {
@@ -663,8 +663,8 @@ impl<L: LcuApi> Engine<L> {
         self.positions.as_ref()
     }
 
-    /// Zufalls-Eintrag aufloesen: bisherige Wahl behalten, solange sie geht, sonst neu wuerfeln
-    /// unter den eigenen Champions, die Riot fuer diese Rolle empfiehlt.
+    /// Resolve the random entry: keep the previous roll while it stays available, otherwise
+    /// roll again among owned champions that Riot recommends for this role.
     async fn random_pick(
         &mut self,
         t: &mut Track,
@@ -708,7 +708,7 @@ impl<L: LcuApi> Engine<L> {
     async fn evaluate_ban(&mut self, session: &Session, t: &mut Track, list: &[i64]) {
         let Some(action) = self.prepare(session, t, list) else { return };
 
-        // Nie bannen, was Teammates spielen wollen - und auch nicht unsere eigene Pick-Absicht.
+        // Never ban what teammates want to play - nor our own pick intent.
         let unavailable = session.unavailable();
         let mut wanted = session.teammate_claims();
         if let Some(me) = session.my_team.iter().find(|p| p.cell_id == session.me()) {
@@ -724,9 +724,9 @@ impl<L: LcuApi> Engine<L> {
         if let Some(target) = self.pick.target {
             wanted.insert(target);
         }
-        // Bewusst KEIN Abgleich mit bannable-champion-ids: die Liste war im Test leer bzw.
-        // unvollstaendig und hat jeden Ban verhindert. Der Client prueft selbst; lehnt er ab,
-        // landet der Champion in `rejected` und der naechste der Liste ist dran.
+        // Deliberately NO check against bannable-champion-ids: in live tests that list was empty
+        // or incomplete and blocked every ban. The client validates itself; if it refuses, the
+        // champion goes into `rejected` and the next one in the list is used.
         let ally_bans = session.ally_ban_hovers();
 
         let mut target = None;
@@ -738,7 +738,7 @@ impl<L: LcuApi> Engine<L> {
                 self.note_skipped(t, c, "you or a teammate want to play it");
                 continue;
             }
-            // Keine Doppel-Bans: was ein Teammate schon hovert, ueberspringen (ausser wir waren zuerst).
+            // No double bans: skip what a teammate already hovers (unless we were first).
             if ally_bans.contains(&c) && action.champion_id != c {
                 self.note_skipped(t, c, "a teammate is already banning it");
                 continue;
@@ -752,7 +752,7 @@ impl<L: LcuApi> Engine<L> {
             return;
         };
 
-        // Hovern und Bannen nur in der echten Ban-Runde (nie in PLANNING).
+        // Hover and ban only in the actual ban round (never in PLANNING).
         if !action.is_in_progress || session.timer.phase != BAN_PICK {
             t.set_view(ActionStatus::Waiting, Some(target));
             return;
@@ -766,7 +766,7 @@ impl<L: LcuApi> Engine<L> {
         self.maybe_lock(t).await;
     }
 
-    // --- Lock (Pick + Ban) --------------------------------------------------
+    // --- Lock (pick + ban) --------------------------------------------------
 
     fn set_active_view(&self, t: &mut Track, target: i64) {
         let s = self.settings();
@@ -778,8 +778,8 @@ impl<L: LcuApi> Engine<L> {
         t.view = Some(ActionView { status: ActionStatus::Hovering, champion_id: Some(target), lock_at: Some(lock_at) });
     }
 
-    /// Lockt/bannt das Ziel, sobald die fortlaufend berechnete Restzeit unter der Schwelle
-    /// liegt. Liefert true, wenn sich die Anzeige geaendert hat.
+    /// Locks/bans the target once the running remaining time drops below the threshold.
+    /// Returns true if the view changed.
     async fn maybe_lock(&mut self, t: &mut Track) -> bool {
         let s = self.settings();
         if !self.enabled(t.kind) || t.manual || t.locked || s.lock_mode != LockMode::AutoLock {
@@ -795,13 +795,13 @@ impl<L: LcuApi> Engine<L> {
             return false;
         }
 
-        // Action muss noch unsere, aktiv und offen sein.
+        // The action must still be ours, active and open.
         let Some(action) = session.own_action(t.kind) else { return false };
         if action.id != action_id || action.completed || !action.is_in_progress {
             return false;
         }
 
-        // Harte Sicherung: nur locken, was gerade wirklich als unser Ziel gehovert ist.
+        // Hard safeguard: only lock what is actually hovered as our target right now.
         if action.champion_id != target {
             let live = action.champion_id;
             if live > 0 && !t.writes.contains(&live) {
@@ -816,7 +816,7 @@ impl<L: LcuApi> Engine<L> {
             return false;
         }
 
-        t.locked = true; // optimistisch gegen Doppel-Lock; bei Fehler zuruecksetzen
+        t.locked = true; // optimistic against a double lock; reset on error
         match self.lcu.patch_action(action_id, target, true).await {
             Ok(()) => {
                 let what = if t.kind == Kind::Pick { "LOCK" } else { "BAN" };
@@ -839,9 +839,9 @@ impl<L: LcuApi> Engine<L> {
         }
     }
 
-    // --- GUI / Lebenszyklus -------------------------------------------------
+    // --- GUI / lifecycle ----------------------------------------------------
 
-    /// Live-Stand in den Store spiegeln (nur bei Aenderung pushen).
+    /// Mirror the live state into the store (push only on change).
     fn publish(&self) {
         let next = match (self.active, self.role) {
             (true, Some(role)) => Some(LiveView { role, pick: self.pick.view.clone(), ban: self.ban.view.clone() }),
@@ -872,7 +872,7 @@ impl<L: LcuApi> Engine<L> {
     }
 }
 
-/// Zufallszahl ohne zusaetzliche Crate (RandomState ist pro Aufruf zufaellig geseedet).
+/// Random number without an extra crate (RandomState is randomly seeded per call).
 fn random_u64() -> u64 {
     use std::hash::{BuildHasher, Hasher};
     let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
@@ -880,7 +880,7 @@ fn random_u64() -> u64 {
     hasher.finish()
 }
 
-// --- Tests: simulierte Champ Selects gegen eine Fake-LCU ---------------------
+// --- Tests: simulated champ selects against a fake LCU -------------------------
 
 #[cfg(test)]
 mod tests {
@@ -905,9 +905,9 @@ mod tests {
         session: Arc<Mutex<Session>>,
         pickable: Arc<Mutex<Vec<i64>>>,
         bannable: Arc<Mutex<Vec<i64>>>,
-        /// Champions, die der "Client" beim PATCH ablehnt (HTTP 500).
+        /// Champions the "client" refuses on PATCH (HTTP 500).
         refuse: Arc<Mutex<Vec<i64>>>,
-        /// Antwort von recommended-champion-positions.
+        /// Response of recommended-champion-positions.
         positions: Arc<Mutex<Value>>,
     }
 
@@ -1024,13 +1024,13 @@ mod tests {
     async fn ranked_draft_full_flow() {
         let mut h = Harness::new(draft_session());
 
-        // A1 Planning: Pre-Hover Ahri, kein Ban-Hover
+        // A1 planning: pre-hover Ahri, no ban hover
         h.emit().await;
         assert_eq!(h.own("pick").champion_id, AHRI);
         assert!(!h.own("pick").completed);
         assert_eq!(h.own("ban").champion_id, 0, "no ban hover in planning");
 
-        // A2 Teammate will Zed spielen -> Ban-Ziel Yasuo
+        // A2 a teammate wants Zed -> ban target Yasuo
         h.edit(|s| {
             s.my_team[1].champion_pick_intent = ZED;
             s.timer = Timer { adjusted_time_left_in_phase: 25000.0, phase: BAN_PICK.into() };
@@ -1039,22 +1039,22 @@ mod tests {
         assert_eq!(h.own("ban").champion_id, YASUO);
         assert!(!h.own("ban").completed);
 
-        // A3 Teammate hovert Yasuo als Ban -> wir halten Yasuo (zuerst gehovert)
+        // A3 a teammate hovers Yasuo as ban -> we keep Yasuo (hovered first)
         h.edit(|s| s.actions[0][3].champion_id = YASUO);
         h.emit().await;
         assert_eq!(h.own("ban").champion_id, YASUO);
 
-        // A4 Ban-Timer < Schwelle -> Ban wird abgeschickt
+        // A4 ban timer < threshold -> ban is sent
         h.edit(|s| s.timer.adjusted_time_left_in_phase = 2000.0);
         h.emit().await;
         assert!(h.own("ban").completed && h.own("ban").champion_id == YASUO);
 
-        // A5 Gegner bannt Ahri, unsere Pick-Runde startet -> Syndra
+        // A5 the enemy bans Ahri, our pick round starts -> Syndra
         h.end_bans();
         h.edit(|s| {
             s.actions[0][7].champion_id = AHRI;
             s.bans.their_team_bans = vec![AHRI];
-            s.actions[3][0].is_in_progress = true; // Pick-Action von Zelle 2
+            s.actions[3][0].is_in_progress = true; // pick action of cell 2
             s.timer = Timer { adjusted_time_left_in_phase: 30000.0, phase: BAN_PICK.into() };
         });
         h.emit().await;
@@ -1064,7 +1064,7 @@ mod tests {
         assert_eq!(live.pick.as_ref().unwrap().status, ActionStatus::Hovering);
         assert!(live.pick.unwrap().lock_at.is_some());
 
-        // A6 Restzeit faellt per Tick unter 3 s (ohne Event) -> Lock
+        // A6 remaining time drops below 3 s via tick (no event) -> lock
         h.edit(|s| s.timer.adjusted_time_left_in_phase = 3400.0);
         h.emit().await;
         assert!(!h.own("pick").completed, "not locked at 3.4s");
@@ -1082,12 +1082,12 @@ mod tests {
         h.emit().await;
         assert_eq!(h.own("pick").champion_id, AHRI);
 
-        // Nutzer waehlt selbst Lux
+        // the user picks Lux manually
         h.edit(|s| s.actions[3][0].champion_id = LUX);
         h.emit().await;
         assert_eq!(h.live().unwrap().pick.unwrap().status, ActionStatus::Manual);
 
-        // Pick-Runde, Timer laeuft ab -> kein Lock, kein Ueberschreiben
+        // pick round, timer runs out -> no lock, no overwrite
         h.end_bans();
         h.edit(|s| {
             s.actions[3][0].is_in_progress = true;
@@ -1107,8 +1107,8 @@ mod tests {
         assert_eq!(h.own("pick").champion_id, SYNDRA);
     }
 
-    /// Ohne zugewiesene Rolle (Arena, Custom) bleibt die Engine passiv - auch wenn fuer
-    /// "none" aus alten Versionen noch eine Liste in der Konfiguration steht.
+    /// Without an assigned role (Arena, custom) the engine stays idle - even if an old version
+    /// left a "none" list in the configuration.
     #[tokio::test]
     async fn no_role_stays_idle() {
         let mut session = draft_session();
@@ -1138,13 +1138,13 @@ mod tests {
             s.timer = Timer { adjusted_time_left_in_phase: 2000.0, phase: BAN_PICK.into() };
         });
 
-        // Master aus -> nichts
+        // master off -> nothing
         h.shared.store().settings.master_enabled = false;
         h.emit().await;
         assert_eq!(h.own("pick").champion_id, 0);
         assert_eq!(h.live().unwrap().pick.unwrap().status, ActionStatus::Off);
 
-        // Master an -> Ahri hovern + locken (ohne neues Event)
+        // master on -> hover + lock Ahri (without a new event)
         h.shared.store().settings.master_enabled = true;
         h.engine.refresh().await;
         assert_eq!(h.own("pick").champion_id, AHRI);
@@ -1167,8 +1167,8 @@ mod tests {
         assert_eq!(h.live().unwrap().pick.unwrap().status, ActionStatus::HoverOnly);
     }
 
-    /// Solo-Custom-Draft (Bug-Report v2.0.0): bannable-Liste leer, danach kommen keine Events
-    /// mehr. Trotzdem muss gehovert und rechtzeitig gebannt werden.
+    /// Solo custom draft (bug report v2.0.0): empty bannable list, then no more events.
+    /// It must still hover and ban in time.
     #[tokio::test]
     async fn bans_without_bannable_list_and_without_further_events() {
         let mut session = draft_session();
@@ -1182,14 +1182,14 @@ mod tests {
         assert_eq!(h.own("ban").champion_id, ZED, "hovered although bannable list is empty");
         assert!(!h.own("ban").completed);
 
-        // Kein weiteres Event: nach > 1 s Neubewertung + fortgerechneter Timer -> Ban.
+        // No further event: after > 1 s re-evaluation + running timer -> ban.
         tokio::time::sleep(Duration::from_millis(1200)).await;
         h.engine.tick().await;
         assert!(h.own("ban").completed, "banned via periodic re-evaluation");
         assert_eq!(h.own("ban").champion_id, ZED);
     }
 
-    /// Eine unvollstaendige bannable-Liste darf den Ban nicht verhindern.
+    /// An incomplete bannable list must not prevent the ban.
     #[tokio::test]
     async fn ignores_incomplete_bannable_list() {
         let mut h = Harness::new(draft_session());
@@ -1199,7 +1199,7 @@ mod tests {
         assert_eq!(h.own("ban").champion_id, ZED);
     }
 
-    /// pickable-Liste zu Beginn der eigenen Runde leer -> spaeter ohne Event nachholen.
+    /// Pickable list empty when our round starts -> catch up later without an event.
     #[tokio::test]
     async fn picks_once_pickable_list_arrives_late() {
         let mut h = Harness::new(draft_session());
@@ -1219,7 +1219,7 @@ mod tests {
         assert!(!h.own("pick").completed, "timer must not be reset by re-evaluation");
     }
 
-    /// Lehnt der Client einen Ban ab, wird der naechste Kandidat genommen.
+    /// If the client refuses a ban, the next candidate is used.
     #[tokio::test]
     async fn falls_back_when_client_refuses_a_champion() {
         let mut h = Harness::new(draft_session());
@@ -1231,27 +1231,27 @@ mod tests {
         assert_eq!(h.own("ban").champion_id, YASUO);
     }
 
-    /// Zufall: nur eigene Champions der Rolle, nichts Gebanntes/Beanspruchtes/selbst zu Bannendes.
+    /// Random: only owned champions of the role, nothing banned, claimed or on our own ban list.
     #[tokio::test]
     async fn random_pick_respects_role_ownership_and_team() {
         let mut h = Harness::new(draft_session());
         *h.fake.pickable.lock().unwrap() = vec![AHRI, SYNDRA, ORI, LUX, JANNA];
         h.shared.store().roles.middle = RolePrefs { picks: vec![RANDOM_PICK], bans: vec![ORI] };
         h.edit(|s| {
-            s.my_team[1].champion_pick_intent = AHRI; // Teammate will Ahri
-            s.bans.their_team_bans = vec![SYNDRA]; // Syndra gebannt
+            s.my_team[1].champion_pick_intent = AHRI; // a teammate wants Ahri
+            s.bans.their_team_bans = vec![SYNDRA]; // Syndra banned
         });
         h.emit().await;
-        // Janna passt nicht auf Mid, Ori steht auf der eigenen Banliste -> nur Lux bleibt.
+        // Janna doesn't fit mid, Ori is on our ban list -> only Lux remains.
         assert_eq!(h.own("pick").champion_id, LUX);
 
-        // Stabil: bei weiteren Events wird nicht neu gewuerfelt.
+        // Stable: further events don't re-roll.
         h.emit().await;
         h.emit().await;
         assert_eq!(h.own("pick").champion_id, LUX);
     }
 
-    /// Zufall wuerfelt neu, wenn der bisherige Champion weg ist.
+    /// Random re-rolls when the previous champion is gone.
     #[tokio::test]
     async fn random_pick_rerolls_when_taken() {
         let mut h = Harness::new(draft_session());
@@ -1267,7 +1267,7 @@ mod tests {
         assert_eq!(h.own("pick").champion_id, other);
     }
 
-    /// Kein Janna-Jungle: passt kein eigener Champion zur Rolle, passiert nichts.
+    /// No Janna jungle: if no owned champion fits the role, nothing happens.
     #[tokio::test]
     async fn random_pick_never_goes_off_role() {
         let mut session = draft_session();

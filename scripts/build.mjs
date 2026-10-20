@@ -1,7 +1,7 @@
-// `tauri build` mit Updater-Signatur. Der private Schluessel liegt bewusst ausserhalb des
-// Repos: Standard %USERPROFILE%\.tauri\draftpilot.key (ohne Passwort), ueberschreibbar per
-// TAURI_SIGNING_PRIVATE_KEY (Pfad oder Inhalt) / TAURI_SIGNING_PRIVATE_KEY_PASSWORD.
-// Weitere Argumente gehen an `tauri build` (z. B. `npm run build -- --config ...`).
+// `tauri build` with the updater signature. The private key deliberately lives outside the
+// repo: default %USERPROFILE%\.tauri\draftpilot.key (no password), overridable via
+// TAURI_SIGNING_PRIVATE_KEY (path or content) / TAURI_SIGNING_PRIVATE_KEY_PASSWORD.
+// Extra arguments go to `tauri build` (e.g. `npm run build -- --config ...`).
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -11,7 +11,7 @@ const env = { ...process.env }
 if (!env.TAURI_SIGNING_PRIVATE_KEY) {
   const key = join(homedir(), '.tauri', 'draftpilot.key')
   if (!existsSync(key)) {
-    console.error(`Updater-Schluessel fehlt: ${key} (siehe CLAUDE.md, Abschnitt Updates).`)
+    console.error(`Updater signing key missing: ${key} (see CLAUDE.md, section Updates).`)
     process.exit(1)
   }
   env.TAURI_SIGNING_PRIVATE_KEY = key

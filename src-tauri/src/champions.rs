@@ -1,8 +1,8 @@
-//! Champion-Katalog (ID, Name, Icon-Key) fuer die GUI-Auswahl und lesbare Logs.
-//! Quelle: Riots oeffentliches Data Dragon (funktioniert auch ohne laufenden Client).
-//! Bei jedem Start und Sprachwechsel wird gegen die aktuelle Patch-Version abgeglichen;
-//! neue Champions kommen so automatisch dazu. Gecacht je Sprache in
-//! champions-<locale>.json. Ohne Internet und Cache: Fallback auf die LCU (ohne Icons).
+//! Champion catalog (ID, name, icon key) for the GUI picker and readable logs.
+//! Source: Riot's public Data Dragon (works without a running client). On every start and
+//! language change it syncs with the current patch, so new champions appear automatically.
+//! Cached per language in champions-<locale>.json. No internet and no cache: falls back to
+//! the LCU (without icons).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -32,7 +32,7 @@ struct DDragonFile {
 
 struct Inner {
     catalog: ChampionCatalog,
-    /// Data-Dragon-Locale des aktuellen Katalogs (None = aus der LCU).
+    /// Data Dragon locale of the current catalog (None = from the LCU).
     catalog_locale: Option<String>,
     names: HashMap<i64, String>,
     language: Language,
@@ -42,7 +42,7 @@ type OnChange = Box<dyn Fn(&ChampionCatalog) + Send + Sync>;
 
 pub struct ChampionData {
     inner: RwLock<Inner>,
-    /// Serialisiert Abgleiche; der LCU-Fallback wartet einen laufenden Abgleich ab.
+    /// Serializes syncs; the LCU fallback waits for a running sync.
     refresh_lock: tokio::sync::Mutex<()>,
     dir: PathBuf,
     http: reqwest::Client,
@@ -81,7 +81,7 @@ impl ChampionData {
         self.inner.read().unwrap().names.get(&id).cloned().unwrap_or_else(|| format!("#{id}"))
     }
 
-    /// Sprachwechsel: Cache der neuen Sprache sofort, danach Abgleich mit Data Dragon.
+    /// Language change: use the new language's cache right away, then sync with Data Dragon.
     pub async fn set_language(&self, language: Language) {
         {
             let mut inner = self.inner.write().unwrap();
@@ -94,7 +94,7 @@ impl ChampionData {
         self.refresh().await;
     }
 
-    /// Abgleich mit der aktuellen Data-Dragon-Version (bei Fehler: Cache/LCU bleiben).
+    /// Sync with the current Data Dragon version (on error, cache/LCU data stays).
     pub async fn refresh(&self) {
         let _guard = self.refresh_lock.lock().await;
         let language = self.inner.read().unwrap().language;
@@ -128,7 +128,7 @@ impl ChampionData {
         match result {
             Ok(Some((version, champions))) => {
                 if self.inner.read().unwrap().language != language {
-                    return; // inzwischen umgestellt
+                    return; // language changed meanwhile
                 }
                 let count = champions.len();
                 self.set(
@@ -145,7 +145,7 @@ impl ChampionData {
         }
     }
 
-    /// Fallback, falls Data Dragon nicht erreichbar war: Liste aus dem League-Client.
+    /// Fallback when Data Dragon was unreachable: list from the League client.
     pub async fn fill_from_lcu(&self, client: &LcuClient) {
         let _guard = self.refresh_lock.lock().await;
         if !self.inner.read().unwrap().catalog.champions.is_empty() {
@@ -156,7 +156,7 @@ impl ChampionData {
         else {
             return;
         };
-        // IDs ab 3000 sind Sondermodus-Varianten (z. B. Swarm), keine waehlbaren Champions.
+        // IDs from 3000 up are special-mode variants (e.g. Swarm), not pickable champions.
         let champions: Vec<Champion> = list
             .iter()
             .filter_map(|c| {
@@ -193,7 +193,7 @@ impl ChampionData {
         if let (true, Some(locale)) = (persist, locale) {
             let _ = std::fs::create_dir_all(&self.dir);
             if let Ok(text) = serde_json::to_string(&catalog) {
-                let _ = std::fs::write(self.cache_path(locale), text); // Cache ist optional
+                let _ = std::fs::write(self.cache_path(locale), text); // the cache is optional
             }
         }
     }
@@ -212,7 +212,7 @@ impl ChampionData {
 }
 
 fn sort_by_name(mut list: Vec<Champion>) -> Vec<Champion> {
-    // Grobe, sprachneutrale Sortierung (Akzente/Apostrophe ignorieren, z. B. "Kai'Sa").
+    // Rough, language-neutral sort (ignores accents/apostrophes, e.g. "Kai'Sa").
     let key = |s: &str| -> String {
         s.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
     };

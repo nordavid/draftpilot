@@ -3,8 +3,8 @@ import { RANDOM_PICK } from '@shared/index'
 import { Portrait, useChampions } from '../champions'
 import { useT } from '../i18n'
 
-// Auswahl-Sheet: Suche + Portrait-Raster. Enter nimmt den ersten Treffer, Esc schliesst.
-// Bei Picks steht "Zufall" als eigene Option ueber dem Raster.
+// Picker sheet: search + portrait grid. Enter takes the first match, Esc closes.
+// For picks, "Random" is a separate option above the grid.
 
 function normalize(s: string): string {
   return s
@@ -17,7 +17,7 @@ function normalize(s: string): string {
 export function ChampionPicker(props: {
   title: string
   kind: 'pick' | 'ban'
-  /** Champions, die schon in einer Liste dieser Rolle stehen. */
+  /** Champions already in one of this role's lists. */
   blocked: Set<number>
   onSelect: (id: number) => void
   onClose: () => void

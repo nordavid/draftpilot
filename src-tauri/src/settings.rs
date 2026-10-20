@@ -1,6 +1,6 @@
-//! Einstellungen: Validierung (gemeinsam fuer config.json und GUI) und Persistenz.
-//! Gleiches Format und gleicher Ort wie die Electron-Version (%APPDATA%\Draftpilot\config.json),
-//! damit vorhandene Listen erhalten bleiben.
+//! Settings: validation (shared by config.json and the GUI) and persistence.
+//! Same format and location as the Electron version (%APPDATA%\Draftpilot\config.json),
+//! so existing lists carry over.
 
 use std::fs;
 use std::path::Path;
@@ -14,7 +14,7 @@ use crate::model::{
 };
 use crate::state::Store;
 
-/// Uebernimmt nur gueltige Felder aus `input` (JSON-Objekt) in `target`.
+/// Copies only valid fields from `input` (JSON object) into `target`.
 pub fn apply_settings(target: &mut Settings, input: &Value) {
     match input.get("language").and_then(Value::as_str) {
         Some("en") => target.language = Language::En,
@@ -47,8 +47,8 @@ pub fn apply_settings(target: &mut Settings, input: &Value) {
     }
 }
 
-/// Positive, eindeutige Champion-IDs in Eingabereihenfolge, gekappt auf MAX_LIST.
-/// Pick-Listen duerfen zusaetzlich einmal den Zufalls-Platzhalter enthalten.
+/// Positive, unique champion IDs in input order, capped at MAX_LIST.
+/// Pick lists may also contain the random placeholder once.
 fn sanitize_list(input: Option<&Value>, allow_random: bool) -> Vec<i64> {
     let mut out: Vec<i64> = Vec::new();
     for v in input.and_then(Value::as_array).into_iter().flatten() {
@@ -72,12 +72,12 @@ pub fn sanitize_role_prefs(input: &Value) -> RolePrefs {
     }
 }
 
-/// Ergebnis des Ladens. Nur bei `Loaded`/`Missing` ist der Stand im Speicher verlaesslich.
+/// Result of loading. Only `Loaded`/`Missing` leave a reliable in-memory state.
 #[derive(Debug, PartialEq, Eq)]
 pub enum LoadOutcome {
     Loaded,
     Missing,
-    /// Datei da, aber nicht lesbar/kein JSON -> als config.broken.json gesichert.
+    /// File exists but is unreadable/not JSON -> kept as config.broken.json.
     Unreadable,
 }
 
@@ -90,7 +90,7 @@ pub fn load_into(store: &mut Store, path: &Path, log: &Logger) -> LoadOutcome {
         log.info("No config.json yet - starting with defaults.");
         return LoadOutcome::Missing;
     }
-    // Kurz wiederholen: eine andere Instanz koennte gerade schreiben.
+    // Retry briefly: another instance might be writing right now.
     let mut data = None;
     for attempt in 0..5 {
         data = read_json(path);
@@ -106,7 +106,7 @@ pub fn load_into(store: &mut Store, path: &Path, log: &Logger) -> LoadOutcome {
         log.warn("config.json unreadable - kept a copy as config.broken.json, using defaults.");
         return LoadOutcome::Unreadable;
     };
-    // "toggles" = Schluessel aus v1.0.0.
+    // "toggles" = key used by v1.0.0.
     if let Some(settings) = data.get("settings").or_else(|| data.get("toggles")) {
         apply_settings(&mut store.settings, settings);
     }
@@ -121,8 +121,8 @@ pub fn load_into(store: &mut Store, path: &Path, log: &Logger) -> LoadOutcome {
     LoadOutcome::Loaded
 }
 
-/// Schreibt atomar (Temp-Datei + Umbenennen), damit nie eine halbe Datei gelesen wird.
-/// Die vorige Fassung bleibt als config.bak.json erhalten.
+/// Writes atomically (temp file + rename) so a half-written file is never read.
+/// The previous version is kept as config.bak.json.
 pub fn save(store: &Store, path: &Path) -> std::io::Result<()> {
     let data = json!({ "settings": store.settings, "roles": store.roles });
     if let Some(dir) = path.parent() {
@@ -201,7 +201,7 @@ mod tests {
         assert_eq!(p.picks, vec![1, 2, 3, 4, 5, 6]);
         assert!(p.bans.is_empty());
 
-        // Zufall nur in Picks und nur einmal.
+        // Random only in picks and only once.
         let p = sanitize_role_prefs(&json!({ "picks": [-1, 5, -1], "bans": [-1, 7] }));
         assert_eq!(p.picks, vec![RANDOM_PICK, 5]);
         assert_eq!(p.bans, vec![7]);

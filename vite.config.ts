@@ -2,8 +2,8 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Vite fuer das Tauri-Frontend: fester Port fuer `tauri dev`, Build nach dist/ (wird
-// von Tauri in die EXE eingebettet). WebView2 = aktuelles Chromium -> modernes Target.
+// Vite for the Tauri frontend: fixed port for `tauri dev`, builds to web-dist/ (embedded
+// into the EXE by Tauri). WebView2 = current Chromium -> modern target.
 export default defineConfig({
   plugins: [react()],
   clearScreen: false,

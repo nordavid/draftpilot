@@ -1,7 +1,7 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { isTauri } from '../api'
 
-// Fenster-Buttons der eigenen Titelleiste (Fenster ist ohne native Dekoration).
+// Window buttons of the custom title bar (the window has no native decorations).
 
 export function WindowControls(props: { minimizeLabel: string; closeLabel: string }): React.JSX.Element | null {
   if (!isTauri) return null

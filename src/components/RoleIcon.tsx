@@ -1,8 +1,8 @@
 import type { Role } from '@shared/index'
 
-// Positions-Icons des League-Clients (Pfade aus rcp-fe-lol-static-assets, via CommunityDragon).
-// Zweifarbig wie im Client: Karte halbtransparent, Lane voll - beides in currentColor.
-// "Fill" gibt es dort nur als PNG -> hier als SVG nachgezeichnet.
+// League client position icons (paths from rcp-fe-lol-static-assets, via CommunityDragon).
+// Two-tone like the client: map semi-transparent, lane solid - both in currentColor.
+// "Fill" only exists as a PNG there -> redrawn here as SVG.
 
 const FADED = 0.45
 

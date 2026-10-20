@@ -1,7 +1,7 @@
-/* Draftpilot - League-Client-Vokabular, bewusst schlicht:
-   tiefes Hextech-Navy, duenne Goldrahmen, eckige Formen, Marcellus (Versalien) nur fuer
-   Wortmarke und Ueberschriften, sonst die Systemschrift. Hextech-Blau = "laeuft/live",
-   Gold = Auswahl/Erstwahl, Rot = Ban. Farben aus der LoL-Client-Palette. */
+/* Draftpilot - League client vocabulary, kept plain:
+   deep hextech navy, thin gold frames, square shapes, Marcellus (caps) only for the
+   wordmark and headings, otherwise the system font. Hextech blue = "running/live",
+   gold = selection/first choice, red = ban. Colors from the LoL client palette. */
 :root {
   color-scheme: dark;
 
@@ -87,7 +87,7 @@ h2 {
   border: 1px solid var(--gold-5);
 }
 
-/* --- Titelleiste ------------------------------------------------------------ */
+/* --- Title bar --------------------------------------------------------------- */
 
 .titlebar {
   flex: none;
@@ -108,7 +108,7 @@ h2 {
   height: 100%;
 }
 
-/* Klicks auf Logo/Schriftzug sollen die Leiste treffen (nur sie ist Drag-Region). */
+/* Clicks on logo/wordmark should hit the bar (only it is the drag region). */
 .brand > * {
   pointer-events: none;
 }
@@ -175,7 +175,7 @@ h2 {
   color: #fff;
 }
 
-/* --- Update-Hinweis (unter der Titelleiste) ---------------------------------- */
+/* --- Update notice (below the title bar) ------------------------------------- */
 
 .update {
   flex: none;
@@ -218,7 +218,7 @@ h2 {
   color: var(--grey-1);
 }
 
-/* --- Inhalt ------------------------------------------------------------------ */
+/* --- Content ----------------------------------------------------------------- */
 
 .content {
   flex: 1;
@@ -263,7 +263,7 @@ h2 {
   color: var(--gold-1);
 }
 
-/* Trennstrich zwischen Verbindung und Phase (Phase = Wert, Verbindung = Label). */
+/* Divider between connection and phase (phase = value, connection = label). */
 .status-phase::before {
   content: '';
   width: 1px;
@@ -287,7 +287,7 @@ h2 {
   opacity: 0.5;
 }
 
-/* --- Live (nur in der Champ Select) ------------------------------------------ */
+/* --- Live (champ select only) ----------------------------------------------- */
 
 .live {
   background: var(--ink);
@@ -458,7 +458,7 @@ h2 {
   color: var(--grey-2);
 }
 
-/* --- Rollen-Tabs ------------------------------------------------------------- */
+/* --- Role tabs --------------------------------------------------------------- */
 
 .role-tabs {
   display: grid;
@@ -546,7 +546,7 @@ h2 {
   color: var(--grey-2);
 }
 
-/* --- Prioritaetsreihe -------------------------------------------------------- */
+/* --- Priority row ------------------------------------------------------------ */
 
 .prio-row {
   --accent: var(--gold-2);
@@ -622,7 +622,7 @@ h2 {
   opacity: 0.35;
 }
 
-/* Einfuegemarke beim Sortieren per Drag & Drop. */
+/* Insertion marker while reordering via drag & drop. */
 .slot.drop-before::before,
 .slot.drop-after::after {
   content: '';
@@ -752,7 +752,7 @@ h2 {
   font-size: 14px;
 }
 
-/* Zufall: Wuerfel mittig (muss nach .portrait stehen, sonst gewinnt display:block). */
+/* Random: centered dice (must come after .portrait, otherwise display:block wins). */
 .portrait-random {
   display: grid;
   place-items: center;
@@ -764,7 +764,7 @@ h2 {
   display: block;
 }
 
-/* --- Einstellungen ----------------------------------------------------------- */
+/* --- Settings ---------------------------------------------------------------- */
 
 .settings {
   margin-top: 26px;
@@ -897,7 +897,7 @@ h2 {
   font-size: 12.5px;
 }
 
-/* --- Protokoll --------------------------------------------------------------- */
+/* --- Log --------------------------------------------------------------------- */
 
 .log {
   margin-top: 18px;
@@ -964,7 +964,7 @@ h2 {
   color: var(--red);
 }
 
-/* --- Champion-Auswahl -------------------------------------------------------- */
+/* --- Champion picker --------------------------------------------------------- */
 
 .sheet-backdrop {
   position: fixed;
@@ -1122,7 +1122,7 @@ h2 {
   opacity: 0.25;
 }
 
-/* --- Bewegung ---------------------------------------------------------------- */
+/* --- Motion ------------------------------------------------------------------ */
 
 @keyframes pulse {
   50% {

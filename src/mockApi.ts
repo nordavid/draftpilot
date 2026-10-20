@@ -1,7 +1,7 @@
 import type { ChampionCatalog, DraftpilotApi, LogEntry, UiState } from '@shared/index'
 
-// Beispieldaten fuer die GUI im normalen Browser (ohne Tauri/League-Client).
-// URL-Parameter: ?live=0 (keine Champ Select), ?paused=1, ?lang=de, ?update=2.3.0
+// Sample data for the GUI in a plain browser (no Tauri, no League client).
+// URL parameters: ?live=0 (no champ select), ?paused=1, ?lang=de, ?update=2.3.0
 
 const params = new URLSearchParams(location.search)
 const now = Date.now()

@@ -1,6 +1,6 @@
-//! Zentraler Laufzeit-Zustand (Single Source of Truth). Mutationen rufen `touch()`
-//! (nur GUI) bzw. `touch_settings()` (GUI + config.json); die Bruecke in lib.rs pusht
-//! daraufhin entprellt einen Snapshot ans Frontend bzw. speichert.
+//! Central runtime state (single source of truth). Mutations call `touch()` (GUI only)
+//! or `touch_settings()` (GUI + config.json); app.rs then pushes a debounced snapshot to
+//! the frontend and saves.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -17,7 +17,7 @@ pub struct Store {
     pub live: Option<LiveView>,
     pub settings: Settings,
     pub roles: RolePrefsMap,
-    /// Verfuegbares Update (Version), gesetzt von der Update-Pruefung beim Start.
+    /// Available update (version), set by the update check on start.
     pub update: Option<String>,
 }
 
@@ -39,13 +39,13 @@ pub struct Shared {
     store: Mutex<Store>,
     pub log: Arc<LogHub>,
     pub version: String,
-    /// Signal "GUI-Snapshot neu senden".
+    /// Signal "send a fresh GUI snapshot".
     pub ui_changed: Notify,
-    /// Signal "config.json neu schreiben".
+    /// Signal "write config.json".
     pub settings_changed: Notify,
-    /// Gibt es Einstellungs-Aenderungen, die noch nicht gespeichert sind? Nur dann wird
-    /// geschrieben - nie "auf Verdacht" (sonst ueberschreibt z. B. eine Instanz, die die
-    /// Datei nicht lesen konnte, beim Beenden die Listen mit Standardwerten).
+    /// Are there unsaved settings changes? Only then is the file written - never "just in
+    /// case" (otherwise e.g. an instance that couldn't read the file overwrites the lists
+    /// with defaults on exit).
     settings_dirty: AtomicBool,
 }
 
@@ -75,7 +75,7 @@ impl Shared {
         self.settings_changed.notify_one();
     }
 
-    /// Liefert true (einmal), wenn ungespeicherte Einstellungs-Aenderungen vorliegen.
+    /// Returns true (once) if there are unsaved settings changes.
     pub fn take_settings_dirty(&self) -> bool {
         self.settings_dirty.swap(false, Ordering::SeqCst)
     }

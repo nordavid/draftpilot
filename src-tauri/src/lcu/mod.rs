@@ -1,5 +1,5 @@
-//! LCU-Anbindung: Credentials finden, HTTPS-Client bauen, Event-Stream oeffnen,
-//! Events weiterreichen, bei Client-Neustart neu verbinden.
+//! LCU connection: find credentials, build the HTTPS client, open the event stream,
+//! forward events, reconnect when the client restarts.
 
 pub mod client;
 pub mod creds;
@@ -17,8 +17,8 @@ pub use client::LcuClient;
 pub const GAMEFLOW_PHASE_URI: &str = "/lol-gameflow/v1/gameflow-phase";
 pub const CHAMP_SELECT_SESSION_URI: &str = "/lol-champ-select/v1/session";
 
-const POLL: Duration = Duration::from_secs(4); // Suche nach offenem Client
-const RECONNECT: Duration = Duration::from_secs(2); // nach Verbindungsabbruch
+const POLL: Duration = Duration::from_secs(4); // look for a running client
+const RECONNECT: Duration = Duration::from_secs(2); // after the connection drops
 
 pub enum LcuEvent {
     Connected,
@@ -27,7 +27,7 @@ pub enum LcuEvent {
     Api { uri: String, event_type: String, data: Value },
 }
 
-/// HTTP-Client der aktiven Verbindung (None, solange kein Client verbunden ist).
+/// HTTP client of the active connection (None while no client is connected).
 #[derive(Clone, Default)]
 pub struct LcuHandle(Arc<RwLock<Option<LcuClient>>>);
 
@@ -41,7 +41,7 @@ impl LcuHandle {
     }
 }
 
-/// Endlosschleife: verbinden, Events streamen, bei Abbruch neu verbinden.
+/// Endless loop: connect, stream events, reconnect when the connection drops.
 pub async fn run_connector(handle: LcuHandle, tx: UnboundedSender<LcuEvent>, log: Logger) {
     log.info("LCU connector started - looking for the League client...");
     let mut announced_searching = false;
@@ -56,14 +56,14 @@ pub async fn run_connector(handle: LcuHandle, tx: UnboundedSender<LcuEvent>, log
             continue;
         };
 
-        // Verbindung verifizieren und dabei die initiale Phase holen.
+        // Verify the connection and fetch the initial phase.
         let Ok(client) = LcuClient::new(&creds) else {
             tokio::time::sleep(POLL).await;
             continue;
         };
         let phase = match client.get(GAMEFLOW_PHASE_URI).await {
             Ok((200, phase)) => phase,
-            // Client startet evtl. gerade hoch -> kurz warten, erneut versuchen.
+            // The client may still be starting -> wait briefly, retry.
             _ => {
                 tokio::time::sleep(POLL).await;
                 continue;
@@ -74,7 +74,7 @@ pub async fn run_connector(handle: LcuHandle, tx: UnboundedSender<LcuEvent>, log
         log.info(format!("LCU connected (port {}, source: {}).", creds.port, creds.source));
         handle.set(Some(client));
         let _ = tx.send(LcuEvent::Connected);
-        // Initiale Phase als synthetisches Event, damit der Ist-Zustand bekannt ist.
+        // Initial phase as a synthetic event so the current state is known.
         let _ = tx.send(LcuEvent::Api {
             uri: GAMEFLOW_PHASE_URI.to_string(),
             event_type: "Update".to_string(),

@@ -1,15 +1,15 @@
-//! Datenmodell, das 1:1 als JSON an das Frontend geht (camelCase, siehe src/shared/index.ts).
+//! Data model sent 1:1 as JSON to the frontend (camelCase, see src/shared/index.ts).
 
 use serde::{Deserialize, Serialize};
 
-/// Maximale Laenge je Pick-/Ban-Liste (Erstwahl + Fallbacks).
+/// Maximum length of a pick/ban list (first choice + fallbacks).
 pub const MAX_LIST: usize = 6;
-/// Platzhalter in der Pick-Liste: zufaelliger eigener Champion, der zur Rolle passt.
+/// Placeholder in a pick list: a random owned champion that fits the role.
 pub const RANDOM_PICK: i64 = -1;
 pub const LOCK_THRESHOLD_MIN_MS: u32 = 1000;
 pub const LOCK_THRESHOLD_MAX_MS: u32 = 15000;
 
-/// Rollen-Schluessel = LCU-`assignedPosition`. `None` greift ohne Rollenzuweisung (Blind Pick).
+/// Role key = LCU `assignedPosition`. `None` = no role assigned (Arena, custom games).
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
@@ -42,7 +42,7 @@ impl Role {
         }
     }
 
-    /// Positionsname der LCU (`recommendedPositions`); None = keine Rolle (alles erlaubt).
+    /// LCU position name (`recommendedPositions`); None = no role.
     pub fn lcu_position(self) -> Option<&'static str> {
         match self {
             Role::Top => Some("TOP"),
@@ -74,7 +74,7 @@ pub enum Language {
 }
 
 impl Language {
-    /// Data-Dragon-Locale fuer Champion-Namen.
+    /// Data Dragon locale for champion names.
     pub fn locale(self) -> &'static str {
         match self {
             Language::En => "en_US",
@@ -90,7 +90,7 @@ pub enum LockMode {
     HoverOnly,
 }
 
-/// Einstellungen. Master uebersteuert alles: ist er aus, tut das Tool nichts.
+/// Settings. The master switch overrides everything: when it's off, the tool does nothing.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -117,7 +117,7 @@ impl Default for Settings {
     }
 }
 
-/// Geordnete Wunschlisten einer Rolle (numerische Riot-Champion-IDs, Erstwahl zuerst).
+/// Ordered lists for one role (numeric Riot champion IDs, first choice first).
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct RolePrefs {
     pub picks: Vec<i64>,
@@ -161,21 +161,21 @@ impl RolePrefsMap {
 #[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub enum ActionStatus {
-    /// Ziel steht fest, unsere Action ist noch nicht dran.
+    /// Target known, our action isn't active yet.
     Waiting,
-    /// Gehovert, Lock folgt kurz vor Ablauf.
+    /// Hovered, lock follows shortly before the timer ends.
     Hovering,
-    /// Gehovert, Lock-Modus "nur hovern".
+    /// Hovered, lock mode "hover only".
     HoverOnly,
-    /// Gelockt bzw. gebannt.
+    /// Locked in or banned.
     Done,
-    /// Nutzer hat selbst gewaehlt -> Automatik pausiert.
+    /// The user chose manually -> automation paused.
     Manual,
-    /// Kein Champion der Liste verfuegbar.
+    /// No champion from the list available.
     None,
-    /// Liste fuer diese Rolle leer.
+    /// List for this role is empty.
     Empty,
-    /// Feature deaktiviert.
+    /// Feature disabled.
     Off,
 }
 
@@ -184,7 +184,7 @@ pub enum ActionStatus {
 pub struct ActionView {
     pub status: ActionStatus,
     pub champion_id: Option<i64>,
-    /// Geplanter Lock-Zeitpunkt (epoch ms) fuer den GUI-Countdown.
+    /// Planned lock time (epoch ms) for the GUI countdown.
     pub lock_at: Option<i64>,
 }
 
@@ -212,7 +212,7 @@ pub struct UiState {
     pub settings: Settings,
     pub roles: RolePrefsMap,
     pub live: Option<LiveView>,
-    /// Neuere Version, die der Updater gefunden hat (sonst None).
+    /// Newer version found by the updater (otherwise None).
     pub update: Option<String>,
 }
 
@@ -235,22 +235,22 @@ pub struct LogEntry {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Champion {
-    /// Numerische Riot-ID (= LCU championId).
+    /// Numeric Riot ID (= LCU championId).
     pub id: i64,
-    /// Data-Dragon-Key, z. B. "MonkeyKing" (fuer Icon-URLs).
+    /// Data Dragon key, e.g. "MonkeyKing" (for icon URLs).
     pub alias: String,
-    /// Lokalisierter Anzeigename.
+    /// Localized display name.
     pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ChampionCatalog {
-    /// Data-Dragon-Version der Icons (None = Liste stammt aus der LCU, keine Icons).
+    /// Data Dragon version for icons (None = list came from the LCU, no icons).
     pub version: Option<String>,
     pub champions: Vec<Champion>,
 }
 
-/// Aktuelle Zeit als epoch ms (gleiche Uhr wie `Date.now()` im Frontend).
+/// Current time as epoch ms (same clock as `Date.now()` in the frontend).
 pub fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

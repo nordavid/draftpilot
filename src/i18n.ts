@@ -1,8 +1,8 @@
 import { createContext, useContext } from 'react'
 import type { GameflowPhase, Language, Role } from '@shared/index'
 
-// GUI-Texte - bewusst kurz. Englisch ist Standard, Deutsch per Einstellung.
-// Logs (Backend) bleiben Englisch.
+// GUI texts - deliberately short. English is the default; German is optional (settings).
+// Logs (backend) are always English.
 
 const en = {
   locale: 'en-US',
@@ -63,7 +63,7 @@ const en = {
   updateInstall: 'Install',
   updateInstalling: 'Installing…',
   updateFailed: 'Update failed',
-  // Prioritaetsreihe
+  // Priority row
   firstChoice: 'First choice',
   fallback: 'Fallback',
   random: 'Random',
@@ -72,7 +72,7 @@ const en = {
   addFallback: (kind: string) => `Add fallback ${kind.toLowerCase()}`,
   pick: 'Pick',
   ban: 'Ban',
-  // Auswahl
+  // Picker
   addTitle: (kind: string, role: string) => `Add ${kind.toLowerCase()} for ${role}`,
   search: 'Search champion',
   randomHint: 'A random owned champion that fits the role',
@@ -187,7 +187,7 @@ const de: Dict = {
 
 export const DICTS: Record<Language, Dict> = { en, de }
 
-/** Anzeigename je Sprache, immer in der eigenen Sprache geschrieben. */
+/** Language names, each written in its own language. */
 export const LANGUAGE_NAME: Record<Language, string> = { en: 'English', de: 'Deutsch' }
 
 export const I18nContext = createContext<Dict>(en)

@@ -4,7 +4,7 @@ import { Portrait, championName, useChampions } from '../champions'
 import { useT, type Dict } from '../i18n'
 import { RoleIcon } from './RoleIcon'
 
-// Live-Anzeige waehrend der Champ Select: Rolle, Pick- und Ban-Ziel mit Status/Countdown.
+// Live view during champ select: role, pick and ban target with status/countdown.
 
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now())

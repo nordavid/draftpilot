@@ -1,5 +1,5 @@
-//! Logging: Ringpuffer fuer die GUI (Protokoll) + Konsole im Dev-Modus.
-//! Meldungen sind Englisch und ASCII (Windows-Konsole -> Mojibake bei UTF-8).
+//! Logging: ring buffer for the GUI log plus the console in dev mode.
+//! Messages are English and ASCII (the Windows console garbles UTF-8).
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -21,7 +21,7 @@ impl LogHub {
         Arc::new(LogHub::default())
     }
 
-    /// Neue Eintraege live weiterreichen (die GUI-Bruecke streamt sie ans Frontend).
+    /// Forward new entries live (the GUI bridge streams them to the frontend).
     pub fn set_sink(&self, sink: Sink) {
         *self.sink.lock().unwrap() = Some(sink);
     }
@@ -52,7 +52,7 @@ impl LogHub {
     }
 }
 
-/// Logger mit festem Bereich (z. B. "lcu", "champselect").
+/// Logger with a fixed scope (e.g. "lcu", "champselect").
 #[derive(Clone)]
 pub struct Logger {
     scope: &'static str,
@@ -76,7 +76,7 @@ impl Logger {
         self.hub.write(self.scope, LogLevel::Error, message.into());
     }
 
-    /// Hervorgehobene Ereignisse (Phasenwechsel, Hover, Lock ...).
+    /// Highlighted events (phase changes, hover, lock ...).
     pub fn event(&self, message: impl Into<String>) {
         self.hub.write(self.scope, LogLevel::Event, message.into());
     }
