@@ -2,6 +2,7 @@
 //! (nur GUI) bzw. `touch_settings()` (GUI + config.json); die Bruecke in lib.rs pusht
 //! daraufhin entprellt einen Snapshot ans Frontend bzw. speichert.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use tokio::sync::Notify;
@@ -42,6 +43,10 @@ pub struct Shared {
     pub ui_changed: Notify,
     /// Signal "config.json neu schreiben".
     pub settings_changed: Notify,
+    /// Gibt es Einstellungs-Aenderungen, die noch nicht gespeichert sind? Nur dann wird
+    /// geschrieben - nie "auf Verdacht" (sonst ueberschreibt z. B. eine Instanz, die die
+    /// Datei nicht lesen konnte, beim Beenden die Listen mit Standardwerten).
+    settings_dirty: AtomicBool,
 }
 
 impl Shared {
@@ -52,6 +57,7 @@ impl Shared {
             version,
             ui_changed: Notify::new(),
             settings_changed: Notify::new(),
+            settings_dirty: AtomicBool::new(false),
         })
     }
 
@@ -64,8 +70,14 @@ impl Shared {
     }
 
     pub fn touch_settings(&self) {
+        self.settings_dirty.store(true, Ordering::SeqCst);
         self.ui_changed.notify_one();
         self.settings_changed.notify_one();
+    }
+
+    /// Liefert true (einmal), wenn ungespeicherte Einstellungs-Aenderungen vorliegen.
+    pub fn take_settings_dirty(&self) -> bool {
+        self.settings_dirty.swap(false, Ordering::SeqCst)
     }
 
     pub fn ui_state(&self) -> UiState {
