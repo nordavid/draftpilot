@@ -43,7 +43,10 @@ League client vocabulary, kept plain: hextech navy (`#010a13`/`#0a1428`), thin g
 headings, otherwise Segoe UI. Hextech blue `#0ac8b9` = running/live, gold = selection/first
 choice, red `#e84057` = ban. Custom title bar (`decorations: false`,
 `data-tauri-drag-region`, `WindowControls.tsx`). Keep texts short, no tooltips. During
-champ select the live panel replaces the status line.
+champ select the live panel replaces the status line. Paused (master off): no extra text,
+live panel, roles and automation settings just fade (layout never shifts). Drag & drop in a
+priority row **swaps** the two champions; the tile under the cursor glows gold. All UI
+texts live in `src/i18n.ts` (`en` + `de`).
 
 The window starts `visible: false` + `backgroundColor` (no white flash). Its height
 **always follows the content** (`.content-inner` + ResizeObserver -> `fitWindow` in

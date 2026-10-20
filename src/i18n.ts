@@ -11,7 +11,6 @@ const en = {
   masterLabel: 'Draftpilot active',
   connected: 'Connected',
   waiting: 'Waiting for League',
-  pausedNote: 'Paused – no automation.',
   phase: {
     None: 'Home',
     Lobby: 'Lobby',
@@ -104,7 +103,6 @@ const de: Dict = {
   masterLabel: 'Draftpilot aktiv',
   connected: 'Verbunden',
   waiting: 'Warte auf League',
-  pausedNote: 'Pausiert – keine Automatik.',
   phase: {
     None: 'Hauptmenü',
     Lobby: 'Lobby',

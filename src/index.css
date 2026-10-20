@@ -276,15 +276,13 @@ h2 {
   color: var(--grey-2);
 }
 
-.paused-note {
-  margin: -6px 0 16px;
-  font-size: 12.5px;
-  color: var(--gold-3);
-}
-
+/* Paused: everything that only matters while active fades out (still editable). The
+   layout never shifts; connection status and language stay fully visible. */
+.app.is-paused .live,
 .app.is-paused .roles,
-.app.is-paused .live {
-  opacity: 0.5;
+.app.is-paused .setting:not(.setting-language) {
+  opacity: 0.45;
+  transition: opacity 150ms;
 }
 
 /* --- Live (champ select only) ----------------------------------------------- */
@@ -622,24 +620,14 @@ h2 {
   opacity: 0.35;
 }
 
-/* Insertion marker while reordering via drag & drop. */
-.slot.drop-before::before,
-.slot.drop-after::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  width: 2px;
-  height: 60px;
-  background: var(--accent);
-  box-shadow: 0 0 6px var(--accent);
+/* Drag & drop swaps champions: the tile under the cursor lights up as the swap target.
+   Extra specificity so it also wins over the first-choice frame. */
+.prio-row .prio-item .slot.is-target .tile {
+  box-shadow: 0 0 0 2px var(--gold-2), 0 0 12px rgb(200 170 110 / 45%);
 }
 
-.slot.drop-before::before {
-  left: -9px;
-}
-
-.slot.drop-after::after {
-  right: -9px;
+.slot.is-target .slot-name {
+  color: var(--gold-1);
 }
 
 .prio-ban .tile:not(.tile-add)::after {
