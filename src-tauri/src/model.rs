@@ -212,6 +212,8 @@ pub struct UiState {
     pub settings: Settings,
     pub roles: RolePrefsMap,
     pub live: Option<LiveView>,
+    /// Neuere Version, die der Updater gefunden hat (sonst None).
+    pub update: Option<String>,
 }
 
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]

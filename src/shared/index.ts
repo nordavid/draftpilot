@@ -132,6 +132,8 @@ export interface UiState {
   roles: RolePrefsMap
   /** Nur waehrend einer Champ Select gesetzt. */
   live: LiveView | null
+  /** Neuere Version zum Installieren (Updater), sonst null. */
+  update: string | null
 }
 
 /** Backend-Schnittstelle fuer die GUI (Tauri-Befehle + Events, siehe src/api.ts). */
@@ -141,6 +143,8 @@ export interface DraftpilotApi {
   getChampions(): Promise<ChampionCatalog>
   setSettings(partial: Partial<Settings>): Promise<UiState>
   setRole(role: Role, prefs: RolePrefs): Promise<UiState>
+  /** Laedt + installiert das Update; die App beendet sich dabei und startet neu. */
+  installUpdate(): Promise<void>
   onState(cb: (state: UiState) => void): () => void
   onLog(cb: (entry: LogEntry) => void): () => void
   onChampions(cb: (catalog: ChampionCatalog) => void): () => void

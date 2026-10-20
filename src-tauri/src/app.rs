@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
+use tauri_plugin_updater::UpdaterExt;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use crate::champions::ChampionData;
@@ -91,6 +92,22 @@ fn set_role(role: Role, prefs: Value, ctx: State<'_, AppCtx>) -> UiState {
     ctx.shared.touch_settings();
     let _ = ctx.engine_tx.send(EngineMsg::Refresh);
     ctx.shared.ui_state()
+}
+
+/// Update laden, Signatur pruefen und installieren. Unter Windows beendet der Updater die
+/// App und startet den NSIS-Installer (passiv), der sie danach neu startet.
+#[tauri::command]
+async fn install_update(app: AppHandle, ctx: State<'_, AppCtx>) -> Result<(), String> {
+    let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
+    let Some(update) = update else { return Err("No update available.".into()) };
+    ctx.log.info(format!("Installing update {}...", update.version));
+    // Der Updater beendet per process::exit -> kein RunEvent::Exit, also vorher speichern.
+    settings::save(&ctx.shared.store(), &ctx.config_path);
+    if let Err(err) = update.download_and_install(|_, _| {}, || {}).await {
+        ctx.log.error(format!("Update failed: {err}"));
+        return Err(err.to_string());
+    }
+    app.restart()
 }
 
 // --- Hintergrund-Tasks ---------------------------------------------------------
@@ -192,6 +209,24 @@ async fn route_events(
     }
 }
 
+/// Beim Start nach einer neueren Version suchen (GitHub Releases, `latest.json`). Fehler
+/// (offline, noch kein Release) nur ins Log - die GUI zeigt dann einfach nichts.
+async fn check_update(app: AppHandle, shared: Arc<Shared>, log: Logger) {
+    let result = match app.updater() {
+        Ok(updater) => updater.check().await,
+        Err(err) => Err(err),
+    };
+    match result {
+        Ok(Some(update)) => {
+            log.info(format!("Update available: {} -> {}.", shared.version, update.version));
+            shared.store().update = Some(update.version);
+            shared.touch();
+        }
+        Ok(None) => {}
+        Err(err) => log.info(format!("Update check failed: {err}")),
+    }
+}
+
 /// Ready-Check annehmen, gated durch Master- UND Auto-Accept-Schalter.
 async fn auto_accept(handle: LcuHandle, shared: Arc<Shared>, log: Logger) {
     let (master, accept) = {
@@ -249,7 +284,15 @@ pub fn run() {
                 let _ = win.set_focus();
             }
         }))
-        .invoke_handler(tauri::generate_handler![get_state, get_logs, get_champions, set_settings, set_role])
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .invoke_handler(tauri::generate_handler![
+            get_state,
+            get_logs,
+            get_champions,
+            set_settings,
+            set_role,
+            install_update
+        ])
         .setup(|app| {
             let handle = app.handle().clone();
             let hub = LogHub::new();
@@ -308,6 +351,10 @@ pub fn run() {
             {
                 let champions = champions.clone();
                 spawn(async move { champions.refresh().await });
+            }
+            // Dev-Builds suchen nicht nach Updates.
+            if !cfg!(debug_assertions) {
+                spawn(check_update(handle.clone(), shared.clone(), Logger::new(&hub, "update")));
             }
 
             // Das Fenster startet unsichtbar und wird vom Frontend nach dem ersten Rendern

@@ -1,7 +1,7 @@
 import type { ChampionCatalog, DraftpilotApi, LogEntry, UiState } from '@shared/index'
 
 // Beispieldaten fuer die GUI im normalen Browser (ohne Tauri/League-Client).
-// URL-Parameter: ?live=0 (keine Champ Select), ?paused=1, ?lang=de
+// URL-Parameter: ?live=0 (keine Champ Select), ?paused=1, ?lang=de, ?update=2.3.0
 
 const params = new URLSearchParams(location.search)
 const now = Date.now()
@@ -35,7 +35,8 @@ let state: UiState = {
           role: 'middle',
           pick: { status: 'hovering', championId: 103, lockAt: now + 9000 },
           ban: { status: 'done', championId: 238, lockAt: null }
-        }
+        },
+  update: params.get('update')
 }
 
 const logs: LogEntry[] = [
@@ -76,6 +77,10 @@ export const mockApi: DraftpilotApi = {
   setRole: async (role, prefs) => {
     state = { ...state, roles: { ...state.roles, [role]: prefs } }
     return emit()
+  },
+  installUpdate: async () => {
+    await new Promise((r) => setTimeout(r, 1500))
+    throw new Error('Kein Updater im Browser.')
   },
   onState: (cb) => {
     listeners.push(cb)
