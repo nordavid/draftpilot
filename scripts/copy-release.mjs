@@ -1,7 +1,7 @@
-// Kopiert die Release-Artefakte nach dist/<version>/, damit eine dort gestartete App
-// den naechsten Build nicht blockiert (target/release/draftpilot.exe waere sonst gesperrt).
-// Schreibt dazu latest.json fuer den Updater (zeigt auf das GitHub-Release v<version>).
-// Optional: Release-Notizen als Argument, z. B. `npm run release -- "Neu: ..."`.
+// Copies the release artifacts to dist/<version>/ so an app started from there doesn't
+// block the next build (target/release/draftpilot.exe would be locked otherwise).
+// Also writes latest.json for the updater (points to the GitHub release v<version>).
+// Optional: release notes as argument (English), e.g. `npm run release -- "New: ..."`.
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 

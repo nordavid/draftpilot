@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useT } from '../i18n'
 
-// Hinweis unter der Titelleiste, sobald der Updater eine neuere Version gefunden hat.
-// Klick laedt + installiert; die App beendet sich dabei und startet neu.
+// Notice below the title bar once the updater has found a newer version.
+// A click downloads + installs; the app quits and restarts in the process.
 
 export function UpdateNotice(props: { version: string; onInstall: () => Promise<void> }): React.JSX.Element {
   const t = useT()

@@ -1,5 +1,5 @@
-//! Verdrahtung: Tauri-App, Befehle fuer das Frontend, Hintergrund-Tasks
-//! (LCU-Connector, Event-Router, Engine, GUI-Push, Speichern).
+//! Wiring: Tauri app, commands for the frontend, background tasks
+//! (LCU connector, event router, engine, GUI push, saving, updates).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ use crate::state::Shared;
 
 const ACCEPT_PATH: &str = "/lol-matchmaking/v1/ready-check/accept";
 const SUMMONER_PATH: &str = "/lol-summoner/v1/current-summoner";
-/// Timer-Tick der Engine (Champ-Select-Events feuern nicht kontinuierlich).
+/// Engine timer tick (champ select events don't fire continuously).
 const TICK: Duration = Duration::from_millis(250);
 
 enum EngineMsg {
@@ -37,7 +37,7 @@ struct AppCtx {
     log: Logger,
 }
 
-// --- Befehle fuer das Frontend -----------------------------------------------
+// --- Commands for the frontend -----------------------------------------------
 
 #[tauri::command]
 fn get_state(ctx: State<'_, AppCtx>) -> UiState {
@@ -94,14 +94,14 @@ fn set_role(role: Role, prefs: Value, ctx: State<'_, AppCtx>) -> UiState {
     ctx.shared.ui_state()
 }
 
-/// Update laden, Signatur pruefen und installieren. Unter Windows beendet der Updater die
-/// App und startet den NSIS-Installer (passiv), der sie danach neu startet.
+/// Download the update, verify its signature and install it. On Windows the updater quits
+/// the app and runs the NSIS installer (passive), which restarts it afterwards.
 #[tauri::command]
 async fn install_update(app: AppHandle, ctx: State<'_, AppCtx>) -> Result<(), String> {
     let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
     let Some(update) = update else { return Err("No update available.".into()) };
     ctx.log.info(format!("Installing update {}...", update.version));
-    // Der Updater beendet per process::exit -> kein RunEvent::Exit, also vorher speichern.
+    // The updater quits via process::exit -> no RunEvent::Exit, so save first.
     flush_settings(&ctx.shared, &ctx.config_path, &ctx.log);
     if let Err(err) = update.download_and_install(|_, _| {}, || {}).await {
         ctx.log.error(format!("Update failed: {err}"));
@@ -110,9 +110,9 @@ async fn install_update(app: AppHandle, ctx: State<'_, AppCtx>) -> Result<(), St
     app.restart()
 }
 
-// --- Hintergrund-Tasks ---------------------------------------------------------
+// --- Background tasks ---------------------------------------------------------
 
-/// Entprellter GUI-Push bei jeder Zustandsaenderung.
+/// Debounced GUI push on every state change.
 async fn push_state(app: AppHandle, shared: Arc<Shared>) {
     loop {
         shared.ui_changed.notified().await;
@@ -121,7 +121,7 @@ async fn push_state(app: AppHandle, shared: Arc<Shared>) {
     }
 }
 
-/// Schreibt die Einstellungen - aber nur, wenn es in dieser Sitzung Aenderungen gab.
+/// Writes the settings - but only if they changed during this session.
 fn flush_settings(shared: &Shared, path: &std::path::Path, log: &Logger) {
     if !shared.take_settings_dirty() {
         return;
@@ -131,7 +131,7 @@ fn flush_settings(shared: &Shared, path: &std::path::Path, log: &Logger) {
     }
 }
 
-/// Entprelltes Speichern der Einstellungen (zusaetzlich Flush beim Beenden).
+/// Debounced saving of settings (plus a flush on exit).
 async fn persist(shared: Arc<Shared>, path: PathBuf, log: Logger) {
     loop {
         shared.settings_changed.notified().await;
@@ -140,7 +140,7 @@ async fn persist(shared: Arc<Shared>, path: PathBuf, log: Logger) {
     }
 }
 
-/// Engine-Task: verarbeitet Session-Events strikt nacheinander + Timer-Tick.
+/// Engine task: processes session events strictly in order + timer tick.
 async fn run_engine(mut engine: Engine<LiveLcu>, mut rx: UnboundedReceiver<EngineMsg>) {
     let mut tick = tokio::time::interval(TICK);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -157,7 +157,7 @@ async fn run_engine(mut engine: Engine<LiveLcu>, mut rx: UnboundedReceiver<Engin
     }
 }
 
-/// Verteilt LCU-Events: Verbindungsstatus, Gameflow-Phase (+ Auto-Accept), Champ Select.
+/// Routes LCU events: connection status, gameflow phase (+ auto-accept), champ select.
 async fn route_events(
     mut rx: UnboundedReceiver<LcuEvent>,
     handle: LcuHandle,
@@ -219,8 +219,8 @@ async fn route_events(
     }
 }
 
-/// Beim Start nach einer neueren Version suchen (GitHub Releases, `latest.json`). Fehler
-/// (offline, noch kein Release) nur ins Log - die GUI zeigt dann einfach nichts.
+/// Check for a newer version on start (GitHub Releases, `latest.json`). Errors (offline,
+/// no release yet) only go to the log - the GUI then simply shows nothing.
 async fn check_update(app: AppHandle, shared: Arc<Shared>, log: Logger) {
     let result = match app.updater() {
         Ok(updater) => updater.check().await,
@@ -237,7 +237,7 @@ async fn check_update(app: AppHandle, shared: Arc<Shared>, log: Logger) {
     }
 }
 
-/// Ready-Check annehmen, gated durch Master- UND Auto-Accept-Schalter.
+/// Accept the ready check, gated by the master AND the auto-accept switch.
 async fn auto_accept(handle: LcuHandle, shared: Arc<Shared>, log: Logger) {
     let (master, accept) = {
         let s = &shared.store().settings;
@@ -259,8 +259,8 @@ async fn auto_accept(handle: LcuHandle, shared: Arc<Shared>, log: Logger) {
     }
 }
 
-/// Eingeloggten Summoner fuer die Anzeige holen. Direkt nach dem Connect antwortet die
-/// LCU oft mit 404 ("noch nicht bereit") -> mit Retry.
+/// Fetch the logged-in summoner for display. Right after connecting the LCU often answers
+/// 404 ("not ready yet") -> retry.
 async fn fetch_summoner(client: lcu::LcuClient, shared: Arc<Shared>, log: Logger) {
     for _ in 0..15 {
         if let Ok((200, data)) = client.get(SUMMONER_PATH).await {
@@ -287,7 +287,7 @@ async fn fetch_summoner(client: lcu::LcuClient, shared: Arc<Shared>, log: Logger
 
 pub fn run() {
     let app = tauri::Builder::default()
-        // Nur eine Instanz (sonst zwei Engines gegen denselben Client): zweite fokussiert die erste.
+        // Single instance (otherwise two engines fight over one client): a second one focuses the first.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(win) = app.get_webview_window("main") {
                 let _ = win.unminimize();
@@ -313,9 +313,9 @@ pub fn run() {
                 }));
             }
 
-            // Gleicher Ort wie die Electron-Version: %APPDATA%\Draftpilot. Testinstanzen
-            // bekommen per DRAFTPILOT_DATA_DIR einen eigenen Ordner (sonst teilen sie sich
-            // config.json mit der echten App).
+            // Same location as the Electron version: %APPDATA%\Draftpilot. Test instances get their
+            // own folder via DRAFTPILOT_DATA_DIR (otherwise they share config.json with the
+            // real app).
             let data_dir = match std::env::var_os("DRAFTPILOT_DATA_DIR") {
                 Some(dir) => std::path::PathBuf::from(dir),
                 None => app.path().data_dir()?.join("Draftpilot"),
@@ -367,13 +367,13 @@ pub fn run() {
                 let champions = champions.clone();
                 spawn(async move { champions.refresh().await });
             }
-            // Dev-Builds suchen nicht nach Updates.
+            // Dev builds don't check for updates.
             if !cfg!(debug_assertions) {
                 spawn(check_update(handle.clone(), shared.clone(), Logger::new(&hub, "update")));
             }
 
-            // Das Fenster startet unsichtbar und wird vom Frontend nach dem ersten Rendern
-            // gezeigt (kein weisser Blitz). Sicherheitsnetz, falls das Frontend haengt.
+            // The window starts hidden and the frontend shows it after the first render (no white
+            // flash). Safety net in case the frontend hangs.
             {
                 let handle = handle.clone();
                 spawn(async move {
@@ -393,7 +393,7 @@ pub fn run() {
         .expect("error while building Draftpilot");
 
     app.run(|handle, event| {
-        // Beim Beenden ausstehende Aenderungen sofort schreiben (nur wenn es welche gibt).
+        // On exit, write pending changes right away (only if there are any).
         if let RunEvent::Exit = event {
             if let Some(ctx) = handle.try_state::<AppCtx>() {
                 flush_settings(&ctx.shared, &ctx.config_path, &ctx.log);

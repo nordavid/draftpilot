@@ -31,7 +31,7 @@ function loadTab(): Role {
     const v = localStorage.getItem(TAB_KEY) as Role | null
     if (v && ROLES.includes(v)) return v
   } catch {
-    // Speicher nicht verfuegbar -> Standard
+    // storage unavailable -> default
   }
   return 'middle'
 }
@@ -44,7 +44,7 @@ function fmtTime(ts: number): string {
 
 type PickerState = { role: Role; kind: 'pick' | 'ban' } | null
 
-/** Hoehe, die die GUI ohne Scrollbalken braucht (Titelleiste + Inhalt + Rahmen). */
+/** Height the GUI needs without a scrollbar (title bar + content + border). */
 function naturalHeight(inner: HTMLElement): number {
   const titlebar = document.querySelector<HTMLElement>('.titlebar')
   const content = inner.parentElement
@@ -79,7 +79,7 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
     return () => offs.forEach((off) => off())
   }, [api])
 
-  // Beim Betreten der Champ Select direkt die zugewiesene Rolle zeigen.
+  // When entering champ select, switch to the assigned role right away.
   useEffect(() => {
     if (liveRole && ROLES.includes(liveRole)) setTab(liveRole)
   }, [liveRole])
@@ -88,7 +88,7 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
     try {
       localStorage.setItem(TAB_KEY, tab)
     } catch {
-      // egal
+      // ignore
     }
   }, [tab])
 
@@ -107,9 +107,9 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
     return new Set([...prefs.picks, ...prefs.bans])
   }, [ui, picker])
 
-  // Fenster startet unsichtbar (kein weisser Blitz). Mit dem ersten Zustand: Hoehe auf den
-  // Inhalt bringen, zentrieren, zeigen. Danach folgt die Hoehe dem Inhalt (Champ Select,
-  // Protokoll ...) - kein leerer Platz, kein Scrollbalken.
+  // The window starts hidden (no white flash). With the first state: fit the height to the
+  // content, center, show. Afterwards the height follows the content (champ select, log ...)
+  // - no empty space, no scrollbar.
   const ready = ui !== null
   const innerRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
@@ -178,7 +178,7 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
 
           <main className="content">
             <div className="content-inner" ref={innerRef}>
-              {/* In der Champ Select ersetzt das Live-Panel die Statuszeile. */}
+              {/* During champ select the live panel replaces the status line. */}
               {ui.live ? (
                 <LivePanel live={ui.live} />
               ) : (
@@ -366,7 +366,7 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
   )
 }
 
-/** Wortmarke: goldener Pfeil im Rahmen (wie das App-Icon). */
+/** Wordmark: golden arrow in a frame (like the app icon). */
 function Logo(): React.JSX.Element {
   return (
     <svg className="logo" width="18" height="18" viewBox="0 0 22 22" aria-hidden>

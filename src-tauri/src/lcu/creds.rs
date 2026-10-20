@@ -1,7 +1,7 @@
-//! LCU-Credential-Discovery. Zwei Quellen:
-//!   1. Lockfile im Installordner: `LeagueClient:PID:PORT:TOKEN:PROTOCOL`
-//!   2. Prozess-Argumente von LeagueClientUx.exe (`--app-port` / `--remoting-auth-token`)
-//! Port und Token aendern sich bei jedem Client-Start, daher immer frisch ermitteln.
+//! LCU credential discovery. Two sources:
+//!   1. Lockfile in the install folder: `LeagueClient:PID:PORT:TOKEN:PROTOCOL`
+//!   2. Process arguments of LeagueClientUx.exe (`--app-port` / `--remoting-auth-token`)
+//! Port and token change on every client start, so always look them up fresh.
 
 use std::path::PathBuf;
 
@@ -83,7 +83,7 @@ fn from_process() -> Option<Credentials> {
     None
 }
 
-/// Lockfile zuerst (billig), dann die Prozess-Argumente. Blockierend -> spawn_blocking.
+/// Lockfile first (cheap), then the process arguments. Blocking -> use spawn_blocking.
 pub fn discover() -> Option<Credentials> {
     from_lockfile().or_else(from_process)
 }

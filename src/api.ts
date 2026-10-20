@@ -4,8 +4,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi'
 import type { DraftpilotApi } from '@shared/index'
 
-// Backend-Anbindung: in Tauri ueber Befehle + Events (Rust: src-tauri/src/app.rs).
-// Im normalen Browser (`npm run vite:dev`) laeuft die GUI gegen Beispieldaten (mockApi).
+// Backend bridge: in Tauri via commands + events (Rust: src-tauri/src/app.rs).
+// In a plain browser (`npm run vite:dev`) the GUI runs against sample data (mockApi).
 
 function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
   let unlisten: (() => void) | null = null
@@ -42,8 +42,8 @@ export async function loadApi(): Promise<DraftpilotApi> {
 
 const MIN_HEIGHT = 420
 
-/** Fensterhoehe auf den Inhalt bringen (begrenzt durch den Bildschirm). Waechst das Fenster
- *  ueber den unteren Rand, rueckt es nach oben. `center` nur beim ersten Anzeigen. */
+/** Fit the window height to the content (capped by the screen). If the window would grow
+ *  past the bottom edge, it moves up. `center` only on first show. */
 export async function fitWindow(height: number, center = false): Promise<void> {
   if (!isTauri || height <= 0) return
   const win = getCurrentWindow()
@@ -63,11 +63,11 @@ export async function fitWindow(height: number, center = false): Promise<void> {
       await win.setPosition(new LogicalPosition(window.screenX, y))
     }
   } catch {
-    // Groesse ist Kosmetik - Hauptsache, das Fenster ist da.
+    // Size is cosmetic - what matters is that the window is there.
   }
 }
 
-/** Das Fenster startet unsichtbar (dunkler Hintergrund); nach dem Einpassen einblenden. */
+/** The window starts hidden (dark background); show it after fitting. */
 export async function showWindow(): Promise<void> {
   if (isTauri) await getCurrentWindow().show()
 }

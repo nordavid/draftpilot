@@ -1,4 +1,4 @@
-// Kleine Bedienelemente: Schalter, Segment-Auswahl, Stepper.
+// Small controls: switch, segmented control, stepper.
 
 export function Switch(props: {
   checked: boolean

@@ -1,5 +1,5 @@
-//! LCU-Event-Stream: WAMP ueber WebSocket. Nach dem Connect `[5, "OnJsonApiEvent"]`
-//! senden; Events kommen als `[8, "OnJsonApiEvent", { uri, eventType, data }]`.
+//! LCU event stream: WAMP over WebSocket. After connecting, send `[5, "OnJsonApiEvent"]`;
+//! events arrive as `[8, "OnJsonApiEvent", { uri, eventType, data }]`.
 
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
@@ -12,8 +12,8 @@ use tokio_tungstenite::Connector;
 use super::creds::Credentials;
 use super::LcuEvent;
 
-/// Verbindet, abonniert alle JSON-API-Events und reicht sie weiter, bis die Verbindung
-/// endet. Kehrt erst beim Verbindungsende zurueck (Ok) bzw. bei Verbindungsfehler (Err).
+/// Connects, subscribes to all JSON API events and forwards them until the connection
+/// ends. Returns when the connection ends (Ok) or fails to connect (Err).
 pub async fn run(creds: &Credentials, tx: &UnboundedSender<LcuEvent>) -> Result<(), String> {
     let tls = native_tls::TlsConnector::builder()
         .danger_accept_invalid_certs(true)
@@ -46,7 +46,7 @@ pub async fn run(creds: &Credentials, tx: &UnboundedSender<LcuEvent>) -> Result<
             Ok(_) => continue,
         };
         let Ok(Value::Array(frame)) = serde_json::from_str::<Value>(&text) else { continue };
-        // Nur Event-Frames: [8, "OnJsonApiEvent", payload]
+        // Event frames only: [8, "OnJsonApiEvent", payload]
         if frame.first().and_then(Value::as_i64) != Some(8) {
             continue;
         }

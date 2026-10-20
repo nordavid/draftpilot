@@ -1,7 +1,7 @@
 import { createContext, useContext, useState } from 'react'
 import { RANDOM_PICK, type Champion, type ChampionCatalog } from '@shared/index'
 
-// Champion-Katalog fuer die ganze GUI (Namen + Portrait-URLs von Data Dragon).
+// Champion catalog for the whole GUI (names + portrait URLs from Data Dragon).
 
 export interface ChampionLookup {
   catalog: ChampionCatalog
@@ -24,14 +24,14 @@ export function useChampions(): ChampionLookup {
   return useContext(ChampionsContext)
 }
 
-/** Anzeigename; `randomLabel` fuer den Zufalls-Platzhalter in Pick-Listen. */
+/** Display name; `randomLabel` for the random placeholder in pick lists. */
 export function championName(lookup: ChampionLookup, id: number | null, randomLabel = ''): string {
   if (id === null) return ''
   if (id === RANDOM_PICK) return randomLabel
   return lookup.byId.get(id)?.name ?? `#${id}`
 }
 
-/** Quadratisches Champion-Portrait; Zufall = Wuerfel; ohne Data-Dragon-Icon die Initialen. */
+/** Square champion portrait; random = dice; without a Data Dragon icon, the initials. */
 export function Portrait(props: {
   id: number | null
   size: number

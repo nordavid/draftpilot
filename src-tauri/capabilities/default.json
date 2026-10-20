@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Hauptfenster: Events, eigene Titelleiste (anzeigen, ziehen, minimieren, schliessen).",
+  "description": "Main window: events, custom title bar (show, size, drag, minimize, close).",
   "windows": ["main"],
   "permissions": [
     "core:default",

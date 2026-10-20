@@ -1,4 +1,4 @@
-// Release-Build ohne Konsolenfenster.
+// Release builds run without a console window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;

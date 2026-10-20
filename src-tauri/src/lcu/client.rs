@@ -1,5 +1,5 @@
-//! Schlanker HTTPS-Client gegen die LCU. Der Client nutzt ein selbstsigniertes
-//! Zertifikat -> Zertifikats- und Hostnamen-Pruefung aus (nur fuer 127.0.0.1).
+//! Lean HTTPS client for the LCU. The client uses a self-signed certificate ->
+//! certificate and hostname checks are off (127.0.0.1 only).
 
 use std::time::Duration;
 
@@ -26,7 +26,7 @@ impl LcuClient {
         Ok(LcuClient { http, base: creds.base_url(), auth: creds.auth_header() })
     }
 
-    /// Fuehrt einen Request aus; liefert HTTP-Status und (falls vorhanden) JSON-Body.
+    /// Runs a request; returns the HTTP status and the JSON body (if any).
     pub async fn request(
         &self,
         method: Method,

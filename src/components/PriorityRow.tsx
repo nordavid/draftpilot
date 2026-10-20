@@ -3,8 +3,8 @@ import { MAX_LIST } from '@shared/index'
 import { Portrait, championName, useChampions } from '../champions'
 import { useT } from '../i18n'
 
-// Geordnete Champion-Liste einer Rolle: Erstwahl gross, Fallbacks kleiner, Pfeile zeigen
-// die Ausweich-Reihenfolge. Sortieren per Drag & Drop, Entfernen per x.
+// Ordered champion list of a role: first choice large, fallbacks smaller, arrows show the
+// fallback order. Reorder via drag & drop, remove via x.
 
 const FIRST = 64
 const REST = 50
@@ -36,7 +36,7 @@ export function PriorityRow(props: {
 
   const noun = kind === 'pick' ? t.pick : t.ban
   const canAdd = ids.length < MAX_LIST
-  // Einfuegemarke: links vom Ziel beim Ziehen nach vorn, rechts beim Ziehen nach hinten.
+  // Insertion marker: left of the target when dragging forward, right when dragging back.
   const markerSide = (i: number): string => {
     if (dragFrom === null || dragOver !== i || dragFrom === i) return ''
     return dragFrom > i ? 'drop-before' : 'drop-after'

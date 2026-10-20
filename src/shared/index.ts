@@ -1,9 +1,9 @@
-// Typen & Konstanten des Frontends. Spiegeln das Rust-Modell (src-tauri/src/model.rs),
-// das per Tauri-Befehl/Event als JSON (camelCase) ankommt.
+// Frontend types & constants. They mirror the Rust model (src-tauri/src/model.rs), which
+// arrives as JSON (camelCase) via Tauri commands/events.
 
 export const APP_NAME = 'Draftpilot'
 
-/** Gameflow-Phasen des LCU (`/lol-gameflow/v1/gameflow-phase`). */
+/** LCU gameflow phases (`/lol-gameflow/v1/gameflow-phase`). */
 export type GameflowPhase =
   | 'None'
   | 'Lobby'
@@ -29,24 +29,24 @@ export interface LogEntry {
   message: string
 }
 
-// --- Rollen & Praeferenzen ---------------------------------------------------
+// --- Roles & preferences ------------------------------------------------------
 
 /**
- * Rollen-Schluessel = LCU-`assignedPosition`-Werte. `none` = keine Rolle zugewiesen
- * (Arena, Custom Games): dann bleibt Draftpilot beim Picken/Bannen passiv.
+ * Role key = LCU `assignedPosition` values. `none` = no role assigned (Arena, custom
+ * games): Draftpilot then stays idle for picks and bans.
  */
 export type Role = 'top' | 'jungle' | 'middle' | 'bottom' | 'utility' | 'none'
 
-/** Rollen mit eigenen Listen (Tabs). */
+/** Roles with their own lists (tabs). */
 export const ROLES: readonly Role[] = ['top', 'jungle', 'middle', 'bottom', 'utility']
 
-/** Maximale Laenge je Pick-/Ban-Liste (Erstwahl + Fallbacks). */
+/** Maximum length of a pick/ban list (first choice + fallbacks). */
 export const MAX_LIST = 6
 
-/** Platzhalter in der Pick-Liste: zufaelliger eigener Champion, der zur Rolle passt. */
+/** Placeholder in a pick list: a random owned champion that fits the role. */
 export const RANDOM_PICK = -1
 
-/** Geordnete Wunschlisten einer Rolle (numerische Riot-Champion-IDs, Erstwahl zuerst). */
+/** Ordered lists for one role (numeric Riot champion IDs, first choice first). */
 export interface RolePrefs {
   picks: number[]
   bans: number[]
@@ -54,15 +54,15 @@ export interface RolePrefs {
 
 export type RolePrefsMap = Record<Role, RolePrefs>
 
-/** 'auto-lock' = kurz vor Ablauf locken; 'hover-only' = nur hovern, Nutzer lockt selbst. */
+/** 'auto-lock' = lock shortly before the timer ends; 'hover-only' = hover, the user locks. */
 export type LockMode = 'auto-lock' | 'hover-only'
 
-/** GUI-Sprache (Englisch ist Standard). Logs sind immer Englisch. */
+/** GUI language (English is the default). Logs are always English. */
 export type Language = 'en' | 'de'
 
 export const LANGUAGES: readonly Language[] = ['en', 'de']
 
-/** Einstellungen. Master uebersteuert alles: ist er aus, tut das Tool nichts. */
+/** Settings. The master switch overrides everything: when it's off, the tool does nothing. */
 export interface Settings {
   language: Language
   masterEnabled: boolean
@@ -70,7 +70,7 @@ export interface Settings {
   autoPick: boolean
   autoBan: boolean
   lockMode: LockMode
-  /** Locken/Bannen, sobald die Restzeit der eigenen Action darunter faellt (ms). */
+  /** Lock/ban once the remaining time of our action drops below this (ms). */
   lockThresholdMs: number
 }
 
@@ -80,36 +80,36 @@ export const LOCK_THRESHOLD_MAX_MS = 15000
 // --- Champions (Data Dragon / LCU) ------------------------------------------
 
 export interface Champion {
-  /** Numerische Riot-ID (= LCU championId). */
+  /** Numeric Riot ID (= LCU championId). */
   id: number
-  /** Data-Dragon-Key, z. B. "MonkeyKing" (fuer Icon-URLs). */
+  /** Data Dragon key, e.g. "MonkeyKing" (for icon URLs). */
   alias: string
-  /** Lokalisierter Anzeigename, z. B. "Wukong". */
+  /** Localized display name, e.g. "Wukong". */
   name: string
 }
 
 export interface ChampionCatalog {
-  /** Data-Dragon-Version der Icons (null = Liste stammt aus der LCU, keine Icons). */
+  /** Data Dragon version for icons (null = list came from the LCU, no icons). */
   version: string | null
   champions: Champion[]
 }
 
-// --- Live-Zustand der Champ Select -----------------------------------------
+// --- Live champ select state ---------------------------------------------------
 
 export type ActionStatus =
-  | 'waiting' // Ziel steht fest, unsere Action ist noch nicht dran
-  | 'hovering' // gehovert, Lock folgt kurz vor Ablauf
-  | 'hover-only' // gehovert, Lock-Modus "nur hovern"
-  | 'done' // gelockt / gebannt
-  | 'manual' // Nutzer hat selbst gewaehlt -> Automatik pausiert
-  | 'none' // kein Champion der Liste verfuegbar
-  | 'empty' // Liste fuer diese Rolle leer
-  | 'off' // Feature deaktiviert
+  | 'waiting' // target known, our action isn't active yet
+  | 'hovering' // hovered, lock follows shortly before the timer ends
+  | 'hover-only' // hovered, lock mode "hover only"
+  | 'done' // locked in / banned
+  | 'manual' // the user chose manually -> automation paused
+  | 'none' // no champion from the list available
+  | 'empty' // list for this role is empty
+  | 'off' // feature disabled
 
 export interface ActionView {
   status: ActionStatus
   championId: number | null
-  /** Geplanter Lock-Zeitpunkt (epoch ms) fuer den GUI-Countdown, sonst null. */
+  /** Planned lock time (epoch ms) for the GUI countdown, otherwise null. */
   lockAt: number | null
 }
 
@@ -119,11 +119,11 @@ export interface LiveView {
   ban: ActionView | null
 }
 
-// --- GUI <-> Backend-Vertrag (Rust-Gegenstueck: src-tauri/src/model.rs) ------
+// --- GUI <-> backend contract (Rust counterpart: src-tauri/src/model.rs) -------
 
 export type LcuStatus = 'searching' | 'connected'
 
-/** Vollstaendiger UI-Zustand, den das Backend an die GUI pusht. */
+/** Full UI state the backend pushes to the GUI. */
 export interface UiState {
   version: string
   lcu: LcuStatus
@@ -131,20 +131,20 @@ export interface UiState {
   summonerRiotId: string | null
   settings: Settings
   roles: RolePrefsMap
-  /** Nur waehrend einer Champ Select gesetzt. */
+  /** Only set during a champ select. */
   live: LiveView | null
-  /** Neuere Version zum Installieren (Updater), sonst null. */
+  /** Newer version to install (updater), otherwise null. */
   update: string | null
 }
 
-/** Backend-Schnittstelle fuer die GUI (Tauri-Befehle + Events, siehe src/api.ts). */
+/** Backend interface for the GUI (Tauri commands + events, see src/api.ts). */
 export interface DraftpilotApi {
   getState(): Promise<UiState>
   getLogs(): Promise<LogEntry[]>
   getChampions(): Promise<ChampionCatalog>
   setSettings(partial: Partial<Settings>): Promise<UiState>
   setRole(role: Role, prefs: RolePrefs): Promise<UiState>
-  /** Laedt + installiert das Update; die App beendet sich dabei und startet neu. */
+  /** Downloads + installs the update; the app quits and restarts in the process. */
   installUpdate(): Promise<void>
   onState(cb: (state: UiState) => void): () => void
   onLog(cb: (entry: LogEntry) => void): () => void
