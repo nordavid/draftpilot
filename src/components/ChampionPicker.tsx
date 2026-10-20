@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { RANDOM_PICK } from '@shared/index'
 import { Portrait, useChampions } from '../champions'
 import { useT } from '../i18n'
 
 // Auswahl-Sheet: Suche + Portrait-Raster. Enter nimmt den ersten Treffer, Esc schliesst.
+// Bei Picks steht "Zufall" als eigene Option ueber dem Raster.
 
 function normalize(s: string): string {
   return s
@@ -15,8 +17,8 @@ function normalize(s: string): string {
 export function ChampionPicker(props: {
   title: string
   kind: 'pick' | 'ban'
-  /** Champion-ID -> Grund, warum er nicht waehlbar ist (schon in einer Liste). */
-  blocked: Map<number, string>
+  /** Champions, die schon in einer Liste dieser Rolle stehen. */
+  blocked: Set<number>
   onSelect: (id: number) => void
   onClose: () => void
 }): React.JSX.Element {
@@ -47,6 +49,7 @@ export function ChampionPicker(props: {
   }, [catalog, query])
 
   const first = results.find((c) => !props.blocked.has(c.id))
+  const showRandom = props.kind === 'pick' && !query && !props.blocked.has(RANDOM_PICK)
 
   return (
     <div className="sheet-backdrop" onMouseDown={props.onClose}>
@@ -75,28 +78,33 @@ export function ChampionPicker(props: {
             if (e.key === 'Enter' && first) props.onSelect(first.id)
           }}
         />
+        {showRandom && (
+          <button type="button" className="random-option" onClick={() => props.onSelect(RANDOM_PICK)}>
+            <Portrait id={RANDOM_PICK} size={40} />
+            <span className="random-text">
+              <span>{t.random}</span>
+              <small>{t.randomHint}</small>
+            </span>
+          </button>
+        )}
         {catalog.champions.length === 0 ? (
           <p className="sheet-empty">{t.catalogLoading}</p>
         ) : results.length === 0 ? (
           <p className="sheet-empty">{t.noMatch(query)}</p>
         ) : (
           <div className="champ-grid">
-            {results.map((c) => {
-              const reason = props.blocked.get(c.id)
-              return (
-                <button
-                  type="button"
-                  key={c.id}
-                  className={`champ ${c.id === first?.id && query ? 'is-first' : ''}`}
-                  disabled={!!reason}
-                  title={reason ?? c.name}
-                  onClick={() => props.onSelect(c.id)}
-                >
-                  <Portrait id={c.id} size={48} />
-                  <span>{c.name}</span>
-                </button>
-              )
-            })}
+            {results.map((c) => (
+              <button
+                type="button"
+                key={c.id}
+                className={`champ ${c.id === first?.id && query ? 'is-first' : ''}`}
+                disabled={props.blocked.has(c.id)}
+                onClick={() => props.onSelect(c.id)}
+              >
+                <Portrait id={c.id} size={48} />
+                <span>{c.name}</span>
+              </button>
+            ))}
           </div>
         )}
       </div>

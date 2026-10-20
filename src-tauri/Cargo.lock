@@ -828,7 +828,7 @@ dependencies = [
 
 [[package]]
 name = "draftpilot"
-version = "2.0.1"
+version = "2.1.0"
 dependencies = [
  "base64 0.22.1",
  "futures-util",

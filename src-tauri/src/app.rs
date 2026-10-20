@@ -13,7 +13,7 @@ use crate::champions::ChampionData;
 use crate::engine::{Engine, LiveLcu};
 use crate::lcu::{self, LcuEvent, LcuHandle, CHAMP_SELECT_SESSION_URI, GAMEFLOW_PHASE_URI};
 use crate::log::{LogHub, Logger};
-use crate::model::{ChampionCatalog, LcuStatus, LogEntry, Role, UiState};
+use crate::model::{ChampionCatalog, LcuStatus, LogEntry, Role, UiState, RANDOM_PICK};
 use crate::settings;
 use crate::state::Shared;
 
@@ -75,7 +75,10 @@ fn set_settings(patch: Value, ctx: State<'_, AppCtx>) -> UiState {
 fn set_role(role: Role, prefs: Value, ctx: State<'_, AppCtx>) -> UiState {
     let sanitized = settings::sanitize_role_prefs(&prefs);
     let fmt = |ids: &[i64]| -> String {
-        let names: Vec<String> = ids.iter().map(|id| ctx.champions.name(*id)).collect();
+        let names: Vec<String> = ids
+            .iter()
+            .map(|id| if *id == RANDOM_PICK { "Random".to_string() } else { ctx.champions.name(*id) })
+            .collect();
         if names.is_empty() { "-".into() } else { names.join(", ") }
     };
     ctx.log.info(format!(
@@ -305,6 +308,20 @@ pub fn run() {
             {
                 let champions = champions.clone();
                 spawn(async move { champions.refresh().await });
+            }
+
+            // Das Fenster startet unsichtbar und wird vom Frontend nach dem ersten Rendern
+            // gezeigt (kein weisser Blitz). Sicherheitsnetz, falls das Frontend haengt.
+            {
+                let handle = handle.clone();
+                spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(3)).await;
+                    if let Some(win) = handle.get_webview_window("main") {
+                        if !win.is_visible().unwrap_or(true) {
+                            let _ = win.show();
+                        }
+                    }
+                });
             }
 
             app.manage(AppCtx { shared, champions, engine_tx, config_path, log: Logger::new(&hub, "app") });

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from 'react'
-import type { Champion, ChampionCatalog } from '@shared/index'
+import { RANDOM_PICK, type Champion, type ChampionCatalog } from '@shared/index'
 
 // Champion-Katalog fuer die ganze GUI (Namen + Portrait-URLs von Data Dragon).
 
@@ -24,12 +24,14 @@ export function useChampions(): ChampionLookup {
   return useContext(ChampionsContext)
 }
 
-export function championName(lookup: ChampionLookup, id: number | null): string {
+/** Anzeigename; `randomLabel` fuer den Zufalls-Platzhalter in Pick-Listen. */
+export function championName(lookup: ChampionLookup, id: number | null, randomLabel = ''): string {
   if (id === null) return ''
+  if (id === RANDOM_PICK) return randomLabel
   return lookup.byId.get(id)?.name ?? `#${id}`
 }
 
-/** Quadratisches Champion-Portrait; ohne Data-Dragon-Icon die Initialen. */
+/** Quadratisches Champion-Portrait; Zufall = Wuerfel; ohne Data-Dragon-Icon die Initialen. */
 export function Portrait(props: {
   id: number | null
   size: number
@@ -37,21 +39,29 @@ export function Portrait(props: {
 }): React.JSX.Element {
   const { catalog, byId } = useChampions()
   const [failed, setFailed] = useState<string | null>(null)
+  const style = { width: props.size, height: props.size }
+  const cls = `portrait ${props.className ?? ''}`
+
+  if (props.id === RANDOM_PICK) {
+    return (
+      <span className={`${cls} portrait-random`} style={style} aria-hidden>
+        <Dice size={Math.round(props.size * 0.48)} />
+      </span>
+    )
+  }
+
   const champ = props.id !== null ? byId.get(props.id) : undefined
   const src =
     champ && catalog.version
       ? `https://ddragon.leagueoflegends.com/cdn/${catalog.version}/img/champion/${champ.alias}.png`
       : null
-
-  const style = { width: props.size, height: props.size }
-  const cls = `portrait ${props.className ?? ''}`
   if (src && failed !== src) {
     return (
       <img
         className={cls}
         style={style}
         src={src}
-        alt={champ?.name ?? ''}
+        alt=""
         draggable={false}
         onError={() => setFailed(src)}
       />
@@ -61,5 +71,22 @@ export function Portrait(props: {
     <span className={`${cls} portrait-fallback`} style={style} aria-hidden>
       {champ ? champ.name.slice(0, 2) : '?'}
     </span>
+  )
+}
+
+function Dice(props: { size: number }): React.JSX.Element {
+  return (
+    <svg width={props.size} height={props.size} viewBox="0 0 24 24" aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      {[
+        [8, 8],
+        [16, 8],
+        [12, 12],
+        [8, 16],
+        [16, 16]
+      ].map(([cx, cy]) => (
+        <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.6" fill="currentColor" />
+      ))}
+    </svg>
   )
 }

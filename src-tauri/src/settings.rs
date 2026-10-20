@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use crate::log::Logger;
 use crate::model::{
     Language, LockMode, RolePrefs, Settings, LOCK_THRESHOLD_MAX_MS, LOCK_THRESHOLD_MIN_MS,
-    MAX_LIST, ROLES,
+    MAX_LIST, RANDOM_PICK, ROLES,
 };
 use crate::state::Store;
 
@@ -48,11 +48,13 @@ pub fn apply_settings(target: &mut Settings, input: &Value) {
 }
 
 /// Positive, eindeutige Champion-IDs in Eingabereihenfolge, gekappt auf MAX_LIST.
-fn sanitize_list(input: Option<&Value>) -> Vec<i64> {
+/// Pick-Listen duerfen zusaetzlich einmal den Zufalls-Platzhalter enthalten.
+fn sanitize_list(input: Option<&Value>, allow_random: bool) -> Vec<i64> {
     let mut out: Vec<i64> = Vec::new();
     for v in input.and_then(Value::as_array).into_iter().flatten() {
         if let Some(id) = v.as_i64() {
-            if id > 0 && !out.contains(&id) {
+            let valid = id > 0 || (allow_random && id == RANDOM_PICK);
+            if valid && !out.contains(&id) {
                 out.push(id);
             }
         }
@@ -64,7 +66,10 @@ fn sanitize_list(input: Option<&Value>) -> Vec<i64> {
 }
 
 pub fn sanitize_role_prefs(input: &Value) -> RolePrefs {
-    RolePrefs { picks: sanitize_list(input.get("picks")), bans: sanitize_list(input.get("bans")) }
+    RolePrefs {
+        picks: sanitize_list(input.get("picks"), true),
+        bans: sanitize_list(input.get("bans"), false),
+    }
 }
 
 pub fn load_into(store: &mut Store, path: &Path, log: &Logger) {
@@ -122,5 +127,10 @@ mod tests {
         let p = sanitize_role_prefs(&json!({ "picks": [1, 1, -3, "x", 2, 3, 4, 5, 6, 7], "bans": null }));
         assert_eq!(p.picks, vec![1, 2, 3, 4, 5, 6]);
         assert!(p.bans.is_empty());
+
+        // Zufall nur in Picks und nur einmal.
+        let p = sanitize_role_prefs(&json!({ "picks": [-1, 5, -1], "bans": [-1, 7] }));
+        assert_eq!(p.picks, vec![RANDOM_PICK, 5]);
+        assert_eq!(p.bans, vec![7]);
     }
 }

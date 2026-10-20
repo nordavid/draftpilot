@@ -8,7 +8,7 @@ export function WindowControls(props: { minimizeLabel: string; closeLabel: strin
   const win = getCurrentWindow()
   return (
     <div className="window-controls">
-      <button type="button" aria-label={props.minimizeLabel} title={props.minimizeLabel} onClick={() => void win.minimize()}>
+      <button type="button" aria-label={props.minimizeLabel} onClick={() => void win.minimize()}>
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
           <path d="M1 5.5h8" stroke="currentColor" strokeWidth="1.2" />
         </svg>
@@ -17,7 +17,6 @@ export function WindowControls(props: { minimizeLabel: string; closeLabel: strin
         type="button"
         className="is-close"
         aria-label={props.closeLabel}
-        title={props.closeLabel}
         onClick={() => void win.close()}
       >
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>

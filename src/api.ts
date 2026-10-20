@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { DraftpilotApi } from '@shared/index'
 
 // Backend-Anbindung: in Tauri ueber Befehle + Events (Rust: src-tauri/src/app.rs).
@@ -35,4 +36,10 @@ export async function loadApi(): Promise<DraftpilotApi> {
   if (isTauri) return tauriApi
   const { mockApi } = await import('./mockApi')
   return mockApi
+}
+
+/** Das Fenster startet unsichtbar (dunkler Hintergrund); sobald die GUI steht, einblenden.
+ *  Kein requestAnimationFrame: in einem unsichtbaren WebView kann rAF pausieren. */
+export function showWindow(): void {
+  if (isTauri) void getCurrentWindow().show()
 }

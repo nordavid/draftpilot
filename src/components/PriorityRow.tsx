@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { MAX_LIST } from '@shared/index'
 import { Portrait, championName, useChampions } from '../champions'
 import { useT } from '../i18n'
 
 // Geordnete Champion-Liste einer Rolle: Erstwahl gross, Fallbacks kleiner, Pfeile zeigen
-// die Ausweich-Reihenfolge. Sortieren per Drag & Drop oder Pfeiltasten, Entfernen per x/Entf.
+// die Ausweich-Reihenfolge. Sortieren per Drag & Drop, Entfernen per x.
 
 const FIRST = 64
 const REST = 50
@@ -27,76 +27,57 @@ export function PriorityRow(props: {
   const t = useT()
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
-  const [focusId, setFocusId] = useState<number | null>(null)
-  const rowRef = useRef<HTMLDivElement | null>(null)
-
-  // Fokus bleibt nach dem Verschieben per Tastatur auf dem verschobenen Champion.
-  useEffect(() => {
-    if (focusId === null) return
-    rowRef.current?.querySelector<HTMLButtonElement>(`[data-id="${focusId}"]`)?.focus()
-    setFocusId(null)
-  }, [ids, focusId])
 
   const remove = (i: number): void => onChange(ids.filter((_, j) => j !== i))
-
-  const onKey = (e: React.KeyboardEvent, i: number): void => {
-    if (e.key === 'ArrowLeft' && i > 0) {
-      setFocusId(ids[i])
-      onChange(move(ids, i, i - 1))
-    } else if (e.key === 'ArrowRight' && i < ids.length - 1) {
-      setFocusId(ids[i])
-      onChange(move(ids, i, i + 1))
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
-      remove(i)
-    } else {
-      return
-    }
-    e.preventDefault()
+  const endDrag = (): void => {
+    setDragFrom(null)
+    setDragOver(null)
   }
 
   const noun = kind === 'pick' ? t.pick : t.ban
   const canAdd = ids.length < MAX_LIST
+  // Einfuegemarke: links vom Ziel beim Ziehen nach vorn, rechts beim Ziehen nach hinten.
+  const markerSide = (i: number): string => {
+    if (dragFrom === null || dragOver !== i || dragFrom === i) return ''
+    return dragFrom > i ? 'drop-before' : 'drop-after'
+  }
 
   return (
-    <div className={`prio-row prio-${kind}`} ref={rowRef}>
+    <div className={`prio-row prio-${kind} ${dragFrom !== null ? 'is-sorting' : ''}`}>
       {ids.map((id, i) => {
-        const name = championName(lookup, id)
+        const name = championName(lookup, id, t.random)
         const size = i === 0 ? FIRST : REST
         return (
           <div className="prio-item" key={id}>
             {i > 0 && <Chevron />}
-            <div className={`slot ${dragOver === i && dragFrom !== i ? 'is-over' : ''}`}>
+            <div
+              className={`slot ${markerSide(i)}`}
+              onDragOver={(e) => {
+                if (dragFrom === null) return
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+                if (dragOver !== i) setDragOver(i)
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                if (dragFrom !== null && dragFrom !== i) onChange(move(ids, dragFrom, i))
+                endDrag()
+              }}
+            >
               <div className="slot-box">
                 <div className="tile-wrap">
                   <button
                     type="button"
-                    data-id={id}
                     className={`tile ${dragFrom === i ? 'is-dragging' : ''}`}
                     style={{ width: size, height: size }}
                     draggable
-                    title={`${name} (${i === 0 ? t.firstChoice : t.fallbackN(i)}) - ${t.reorderHint}`}
                     aria-label={`${noun} ${i + 1}: ${name}`}
-                    onKeyDown={(e) => onKey(e, i)}
                     onDragStart={(e) => {
                       e.dataTransfer.effectAllowed = 'move'
+                      e.dataTransfer.setData('text/plain', String(id))
                       setDragFrom(i)
                     }}
-                    onDragOver={(e) => {
-                      if (dragFrom === null) return
-                      e.preventDefault()
-                      setDragOver(i)
-                    }}
-                    onDragLeave={() => setDragOver((o) => (o === i ? null : o))}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      if (dragFrom !== null && dragFrom !== i) onChange(move(ids, dragFrom, i))
-                      setDragFrom(null)
-                      setDragOver(null)
-                    }}
-                    onDragEnd={() => {
-                      setDragFrom(null)
-                      setDragOver(null)
-                    }}
+                    onDragEnd={endDrag}
                   >
                     <Portrait id={id} size={size} />
                     <span className="rank">{i + 1}</span>
@@ -105,7 +86,6 @@ export function PriorityRow(props: {
                     type="button"
                     className="tile-remove"
                     aria-label={t.removeName(name)}
-                    title={t.remove}
                     onClick={() => remove(i)}
                   >
                     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>

@@ -1,10 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Hauptfenster: Events, eigene Titelleiste (ziehen, minimieren, schliessen).",
+  "description": "Hauptfenster: Events, eigene Titelleiste (anzeigen, ziehen, minimieren, schliessen).",
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-show",
     "core:window:allow-minimize",
     "core:window:allow-close",
     "core:window:allow-start-dragging",

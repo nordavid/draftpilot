@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Draftpilot",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "identifier": "de.nordavid.draftpilot",
   "build": {
     "beforeDevCommand": "npm run vite:dev",
@@ -19,7 +19,10 @@
         "minWidth": 440,
         "minHeight": 620,
         "decorations": false,
-        "center": true
+        "center": true,
+        "visible": false,
+        "backgroundColor": "#010a13",
+        "dragDropEnabled": false
       }
     ],
     "security": {

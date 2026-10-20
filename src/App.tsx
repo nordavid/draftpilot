@@ -15,6 +15,7 @@ import {
 } from '@shared/index'
 import { ChampionsContext, buildLookup, type ChampionLookup } from './champions'
 import { DICTS, I18nContext, LANGUAGE_NAME } from './i18n'
+import { showWindow } from './api'
 import { RoleIcon } from './components/RoleIcon'
 import { PriorityRow } from './components/PriorityRow'
 import { ChampionPicker } from './components/ChampionPicker'
@@ -90,15 +91,18 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
   }, [logs, showLog])
 
   const blocked = useMemo(() => {
-    const map = new Map<number, string>()
-    if (!ui || !picker) return map
+    if (!ui || !picker) return new Set<number>()
     const prefs = ui.roles[picker.role]
-    for (const id of prefs.picks) map.set(id, t.inPicks)
-    for (const id of prefs.bans) map.set(id, t.inBans)
-    return map
-  }, [ui, picker, t])
+    return new Set([...prefs.picks, ...prefs.bans])
+  }, [ui, picker])
 
-  if (!ui) return <div className="boot">{t.boot}</div>
+  // Fenster startet unsichtbar (kein weisser Blitz) und erscheint mit dem ersten Zustand.
+  const ready = ui !== null
+  useEffect(() => {
+    if (ready) showWindow()
+  }, [ready])
+
+  if (!ui) return <div className="boot" />
 
   const s = ui.settings
   const paused = !s.masterEnabled
@@ -149,18 +153,23 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
           </header>
 
           <main className="content">
-            <div className="status">
-              <span className={`status-conn ${connected ? 'is-ok' : 'is-wait'}`}>
-                <span className="dot" aria-hidden />
-                {connected ? t.connected : t.waiting}
-              </span>
-              {connected && ui.phase && <span className="status-phase">{t.phase[ui.phase]}</span>}
-              {ui.summonerRiotId && <span className="status-summoner">{ui.summonerRiotId}</span>}
-            </div>
+            {/* In der Champ Select ersetzt das Live-Panel die Statuszeile. */}
+            {ui.live ? (
+              <LivePanel live={ui.live} />
+            ) : (
+              <div className="status">
+                <span className={`status-conn ${connected ? 'is-ok' : 'is-wait'}`}>
+                  <span className="dot" aria-hidden />
+                  {connected ? t.connected : t.waiting}
+                </span>
+                {connected && ui.phase && (
+                  <span className="status-phase">{t.phase[ui.phase]}</span>
+                )}
+                {ui.summonerRiotId && <span className="status-summoner">{ui.summonerRiotId}</span>}
+              </div>
+            )}
 
             {paused && <p className="paused-note">{t.pausedNote}</p>}
-
-            {ui.live && <LivePanel live={ui.live} />}
 
             <section className="roles" aria-label={t.rolesLabel}>
               <div className="role-tabs" role="tablist">
@@ -175,7 +184,6 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
                       aria-selected={tab === r}
                       className={`role-tab ${tab === r ? 'is-active' : ''} ${liveRole === r ? 'is-live' : ''}`}
                       onClick={() => setTab(r)}
-                      title={liveRole === r ? `${t.role[r]} ${t.liveRoleSuffix}` : t.role[r]}
                     >
                       <RoleIcon role={r} size={22} />
                       <span>{t.role[r]}</span>
