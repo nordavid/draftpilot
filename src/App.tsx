@@ -194,7 +194,6 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
                 </div>
               )}
 
-              {paused && <p className="paused-note">{t.pausedNote}</p>}
 
               <section className="roles" aria-label={t.rolesLabel}>
                 <div className="role-tabs" role="tablist">
@@ -311,7 +310,7 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
                     disabled={s.lockMode !== 'auto-lock'}
                   />
                 </div>
-                <div className="setting">
+                <div className="setting setting-language">
                   <div className="setting-text">
                     <span>{t.language}</span>
                   </div>

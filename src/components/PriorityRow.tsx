@@ -4,15 +4,15 @@ import { Portrait, championName, useChampions } from '../champions'
 import { useT } from '../i18n'
 
 // Ordered champion list of a role: first choice large, fallbacks smaller, arrows show the
-// fallback order. Reorder via drag & drop, remove via x.
+// fallback order. Drag a champion onto another to swap them, remove via x.
 
 const FIRST = 64
 const REST = 50
 
-function move(list: number[], from: number, to: number): number[] {
+function swap(list: number[], a: number, b: number): number[] {
   const next = [...list]
-  const [item] = next.splice(from, 1)
-  next.splice(to, 0, item)
+  next[a] = list[b]
+  next[b] = list[a]
   return next
 }
 
@@ -36,11 +36,6 @@ export function PriorityRow(props: {
 
   const noun = kind === 'pick' ? t.pick : t.ban
   const canAdd = ids.length < MAX_LIST
-  // Insertion marker: left of the target when dragging forward, right when dragging back.
-  const markerSide = (i: number): string => {
-    if (dragFrom === null || dragOver !== i || dragFrom === i) return ''
-    return dragFrom > i ? 'drop-before' : 'drop-after'
-  }
 
   return (
     <div className={`prio-row prio-${kind} ${dragFrom !== null ? 'is-sorting' : ''}`}>
@@ -51,16 +46,22 @@ export function PriorityRow(props: {
           <div className="prio-item" key={id}>
             {i > 0 && <Chevron />}
             <div
-              className={`slot ${markerSide(i)}`}
+              className={`slot ${dragFrom !== null && dragOver === i && dragFrom !== i ? 'is-target' : ''}`}
               onDragOver={(e) => {
                 if (dragFrom === null) return
                 e.preventDefault()
                 e.dataTransfer.dropEffect = 'move'
                 if (dragOver !== i) setDragOver(i)
               }}
+              onDragLeave={(e) => {
+                // Only when leaving the slot itself, not when moving between its children.
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                  setDragOver((o) => (o === i ? null : o))
+                }
+              }}
               onDrop={(e) => {
                 e.preventDefault()
-                if (dragFrom !== null && dragFrom !== i) onChange(move(ids, dragFrom, i))
+                if (dragFrom !== null && dragFrom !== i) onChange(swap(ids, dragFrom, i))
                 endDrag()
               }}
             >
