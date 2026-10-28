@@ -28,8 +28,17 @@ export function Segmented<T extends string>(props: {
   label: string
   disabled?: boolean
 }): React.JSX.Element {
+  const index = Math.max(0, props.options.findIndex((o) => o.value === props.value))
   return (
     <div className="segmented" role="radiogroup" aria-label={props.label}>
+      <span
+        className="seg-indicator"
+        style={{
+          width: `calc((100% - 6px) / ${props.options.length})`,
+          transform: `translateX(${index * 100}%)`
+        }}
+        aria-hidden
+      />
       {props.options.map((o) => (
         <button
           type="button"

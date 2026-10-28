@@ -148,7 +148,6 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
         picker.kind === 'pick' ? { ...cur, picks: [...list, id] } : { ...cur, bans: [...list, id] }
       )
     }
-    setPicker(null)
   }
 
   const connected = ui.lcu === 'connected'
@@ -197,6 +196,11 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
 
               <section className="roles" aria-label={t.rolesLabel}>
                 <div className="role-tabs" role="tablist">
+                  <span
+                    className="tab-indicator"
+                    style={{ transform: `translateX(${Math.max(0, ROLES.indexOf(tab)) * 100}%)` }}
+                    aria-hidden
+                  />
                   {ROLES.map((r) => {
                     const p = ui.roles[r]
                     const configured = p.picks.length + p.bans.length > 0
@@ -209,7 +213,7 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
                         className={`role-tab ${tab === r ? 'is-active' : ''} ${liveRole === r ? 'is-live' : ''}`}
                         onClick={() => setTab(r)}
                       >
-                        <RoleIcon role={r} size={22} />
+                        <RoleIcon role={r} size={16} />
                         <span>{t.role[r]}</span>
                         {configured && <span className="role-mark" aria-hidden />}
                       </button>
@@ -217,7 +221,7 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
                   })}
                 </div>
 
-                <div className="role-body" role="tabpanel">
+                <div className="role-body card" role="tabpanel">
                   <div className="list-block">
                     <div className="list-head">
                       <h2>{t.picks}</h2>
@@ -246,7 +250,7 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
                 </div>
               </section>
 
-              <section className="settings">
+              <section className="settings card">
                 <div className="setting">
                   <div className="setting-text">
                     <span>{t.autoAccept}</span>
@@ -365,12 +369,18 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
   )
 }
 
-/** Wordmark: golden arrow in a frame (like the app icon). */
+/** App mark: dark arrow on a gold rounded square (like the app icon). */
 function Logo(): React.JSX.Element {
   return (
-    <svg className="logo" width="18" height="18" viewBox="0 0 22 22" aria-hidden>
-      <rect x="1" y="1" width="20" height="20" rx="2" fill="none" stroke="currentColor" opacity="0.55" />
-      <path d="M6.5 16 11 5.5 15.5 16 11 13.4z" fill="currentColor" />
+    <svg className="logo" width="20" height="20" viewBox="0 0 20 20" aria-hidden>
+      <defs>
+        <linearGradient id="dp-logo" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ecca88" />
+          <stop offset="1" stopColor="#c99d52" />
+        </linearGradient>
+      </defs>
+      <rect width="20" height="20" rx="6" fill="url(#dp-logo)" />
+      <path d="M6 14.6 10 4.9l4 9.7-4-2.5z" fill="#17130b" />
     </svg>
   )
 }

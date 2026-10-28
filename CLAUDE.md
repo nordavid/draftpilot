@@ -38,15 +38,25 @@ the German UI translation in `src/i18n.ts`. Chat with the user may be German.
 
 ## Look & feel
 
-League client vocabulary, kept plain: hextech navy (`#010a13`/`#0a1428`), thin gold frames
-(`#463714`/`#785a28`/`#c8aa6e`), square shapes, Marcellus (caps) only for the wordmark and
-headings, otherwise Segoe UI. Hextech blue `#0ac8b9` = running/live, gold = selection/first
-choice, red `#e84057` = ban. Custom title bar (`decorations: false`,
-`data-tauri-drag-region`, `WindowControls.tsx`). Keep texts short, no tooltips. During
-champ select the live panel replaces the status line. Paused (master off): no extra text,
-live panel, roles and automation settings just fade (layout never shifts). Drag & drop in a
-priority row **swaps** the two champions; the tile under the cursor glows gold. All UI
-texts live in `src/i18n.ts` (`en` + `de`).
+Modern and minimal in the spirit of the current **Riot Client** (v2.4.0 overhaul): neutral
+near-black (`#0e0f11`), soft rounded cards (`.card`, radius 16, hairline borders),
+Segoe UI Variable (Display for headings, Text for body), no serif/caps fonts. Gold
+`#d9b56f` = selection / primary (logo, switches, first choice, tab underline), green
+`#3fcf7c` = connected / locked in, red `#ff5d64` = ban. Role tabs are a pill bar with a
+sliding active pill + gold underline (`.tab-indicator`); segmented controls slide too
+(`.seg-indicator`). Custom title bar (`decorations: false`, `data-tauri-drag-region`,
+`WindowControls.tsx`). Keep texts short, no tooltips. During champ select the live panel
+replaces the status line. Paused (master off): no extra text, live panel, roles and
+automation settings just fade (layout never shifts). Drag & drop in a priority row
+**swaps** the two champions; the tile under the cursor glows gold. All UI texts live in
+`src/i18n.ts` (`en` + `de`).
+
+**Motion follows Emil Kowalski's rules** (github.com/emilkowalski/skills): strong custom
+easings (`--ease-out`, `--ease-in-out`, `--ease-drawer`), UI animations < 300 ms, only
+`transform`/`opacity`, `scale(0.97)` press feedback, entries via `@starting-style` from
+`scale(0.96)`/`translateY` (never `scale(0)`), exit faster than enter (picker sheet 280 ms
+in, 160 ms out), keyboard actions (Enter/Esc) close instantly, hover styles only inside
+`@media (hover: hover) and (pointer: fine)`, reduced motion keeps fades only.
 
 The window starts `visible: false` + `backgroundColor` (no white flash). Its height
 **always follows the content** (`.content-inner` + ResizeObserver -> `fitWindow` in

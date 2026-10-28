@@ -4,7 +4,10 @@ import { Portrait, useChampions } from '../champions'
 import { useT } from '../i18n'
 
 // Picker sheet: search + portrait grid. Enter takes the first match, Esc closes.
-// For picks, "Random" is a separate option above the grid.
+// For picks, "Random" is a separate option above the grid. Pointer actions close with a
+// short exit animation; keyboard actions (Enter/Esc) close instantly.
+
+const EXIT_MS = 160
 
 function normalize(s: string): string {
   return s
@@ -25,6 +28,7 @@ export function ChampionPicker(props: {
   const { catalog } = useChampions()
   const t = useT()
   const [query, setQuery] = useState('')
+  const [closing, setClosing] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const closeRef = useRef(props.onClose)
   closeRef.current = props.onClose
@@ -37,6 +41,17 @@ export function ChampionPicker(props: {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  const closeAnimated = (): void => {
+    if (closing) return
+    setClosing(true)
+    setTimeout(() => closeRef.current(), EXIT_MS)
+  }
+  const pick = (id: number): void => {
+    if (closing) return
+    props.onSelect(id)
+    closeAnimated()
+  }
 
   const results = useMemo(() => {
     const q = normalize(query)
@@ -52,7 +67,7 @@ export function ChampionPicker(props: {
   const showRandom = props.kind === 'pick' && !query && !props.blocked.has(RANDOM_PICK)
 
   return (
-    <div className="sheet-backdrop" onMouseDown={props.onClose}>
+    <div className={`sheet-backdrop ${closing ? 'is-closing' : ''}`} onMouseDown={closeAnimated}>
       <div
         className={`sheet sheet-${props.kind}`}
         role="dialog"
@@ -62,24 +77,33 @@ export function ChampionPicker(props: {
       >
         <div className="sheet-head">
           <h2>{props.title}</h2>
-          <button type="button" className="icon-btn" onClick={props.onClose} aria-label={t.close}>
+          <button type="button" className="icon-btn" onClick={closeAnimated} aria-label={t.close}>
             <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
               <path d="M2 2l8 8M10 2 2 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
           </button>
         </div>
-        <input
-          ref={inputRef}
-          className="search"
-          placeholder={t.search}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && first) props.onSelect(first.id)
-          }}
-        />
+        <div className="search-wrap">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+            <circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M9.5 9.5 12.6 12.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <input
+            ref={inputRef}
+            className="search"
+            placeholder={t.search}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && first) {
+                props.onSelect(first.id)
+                props.onClose()
+              }
+            }}
+          />
+        </div>
         {showRandom && (
-          <button type="button" className="random-option" onClick={() => props.onSelect(RANDOM_PICK)}>
+          <button type="button" className="random-option" onClick={() => pick(RANDOM_PICK)}>
             <Portrait id={RANDOM_PICK} size={40} />
             <span className="random-text">
               <span>{t.random}</span>
@@ -99,7 +123,7 @@ export function ChampionPicker(props: {
                 key={c.id}
                 className={`champ ${c.id === first?.id && query ? 'is-first' : ''}`}
                 disabled={props.blocked.has(c.id)}
-                onClick={() => props.onSelect(c.id)}
+                onClick={() => pick(c.id)}
               >
                 <Portrait id={c.id} size={48} />
                 <span>{c.name}</span>
