@@ -43,8 +43,10 @@ near-black (`#0e0f11`), soft rounded cards (`.card`, radius 16, hairline borders
 Segoe UI Variable (Display for headings, Text for body), no serif/caps fonts. Gold
 `#d9b56f` = selection / primary (logo, switches, first choice, tab underline), green
 `#3fcf7c` = connected / locked in, red `#ff5d64` = ban. Role tabs are a pill bar with a
-sliding active pill + gold underline (`.tab-indicator`); segmented controls slide too
-(`.seg-indicator`). Custom title bar (`decorations: false`, `data-tauri-drag-region`,
+sliding active pill (`.tab-indicator`) whose gold underline sits **below** the pill, outside
+the highlight, near the bar's bottom edge (as in the Riot Client); segmented controls slide
+too (`.seg-indicator`). Champion images are cropped with `object-view-box: inset(7%)`:
+Data Dragon squares have a dark vignette baked into their edge. Custom title bar (`decorations: false`, `data-tauri-drag-region`,
 `WindowControls.tsx`). Keep texts short, no tooltips. During champ select the live panel
 replaces the status line. Paused (master off): no extra text, live panel, roles and
 automation settings just fade (layout never shifts). Drag & drop in a priority row

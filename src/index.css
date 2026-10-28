@@ -546,12 +546,14 @@ h2 {
 
 /* --- Role tabs (pill navigation with a sliding active pill) ----------------- */
 
+/* Like the Riot Client: the active pill sits in the bar, its accent line below it
+   (outside the highlight) near the bar's bottom edge. Bottom padding holds that line. */
 .role-tabs {
   position: relative;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   margin-bottom: 10px;
-  padding: 4px;
+  padding: 6px 6px 10px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -559,11 +561,11 @@ h2 {
 
 .tab-indicator {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 4px;
-  width: calc((100% - 8px) / 5);
-  border-radius: 9px;
+  top: 6px;
+  bottom: 10px;
+  left: 6px;
+  width: calc((100% - 12px) / 5);
+  border-radius: 8px;
   background: var(--surface-3);
   transition: transform 240ms var(--ease-in-out);
   pointer-events: none;
@@ -572,12 +574,11 @@ h2 {
 .tab-indicator::after {
   content: '';
   position: absolute;
-  left: 50%;
-  bottom: 4px;
-  width: 18px;
+  left: 25%;
+  right: 25%;
+  bottom: -8px;
   height: 2px;
-  margin-left: -9px;
-  border-radius: 2px;
+  border-radius: 1px;
   background: var(--gold);
 }
 
@@ -588,8 +589,8 @@ h2 {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 38px;
-  padding: 0 4px 2px;
+  height: 36px;
+  padding: 0 4px;
   border: 0;
   border-radius: 9px;
   background: none;
@@ -847,6 +848,12 @@ h2 {
 .portrait {
   display: block;
   object-fit: cover;
+}
+
+/* Data Dragon squares carry a ~9px dark vignette (of 128px) baked into the edge; crop it
+   so rounded tiles show the artwork right up to the corner. */
+img.portrait {
+  object-view-box: inset(7%);
 }
 
 .portrait-fallback {
