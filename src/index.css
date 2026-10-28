@@ -117,7 +117,8 @@ h2 {
 .log-toggle,
 .update button,
 .window-controls button,
-.switch {
+.switch,
+.queue-btn {
   transition: transform 160ms var(--ease-out);
 }
 
@@ -131,7 +132,8 @@ h2 {
 .champ:active:not(:disabled),
 .random-option:active,
 .update button:active,
-.switch:active {
+.switch:active,
+.queue-btn:active:not(:disabled) {
   transform: scale(0.97);
 }
 
@@ -361,10 +363,11 @@ h2 {
 }
 
 /* Paused: everything that only matters while active fades out (still editable). The
-   layout never shifts; connection status and language stay fully visible. */
+   layout never shifts; connection status, "Find match" (a manual action) and language
+   stay fully visible. */
 .app.is-paused .live,
 .app.is-paused .role-tabs,
-.app.is-paused .role-body,
+.app.is-paused .role-body .list-block,
 .app.is-paused .setting:not(.setting-language) {
   opacity: 0.4;
   transition: opacity 200ms ease;
@@ -641,6 +644,81 @@ h2 {
   margin-top: 2px;
   font-size: 12px;
   color: var(--text-3);
+}
+
+/* --- Find match (footer of the role card) ------------------------------------ */
+
+.queue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.queue-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-weight: 500;
+}
+
+.queue-text small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+.segmented.is-icons button {
+  display: grid;
+  place-items: center;
+  padding: 5px 7px;
+}
+
+.queue-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 136px; /* fits every label/notice -> the row never shifts */
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--gold);
+  color: #17130b;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    opacity 200ms ease,
+    transform 160ms var(--ease-out);
+}
+
+.queue-btn:disabled {
+  opacity: 0.4;
+}
+
+.queue-btn.is-cancel {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.queue-btn.is-ok {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.queue-btn.is-error {
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 /* --- Priority row ------------------------------------------------------------ */
@@ -1275,6 +1353,14 @@ img.portrait {
     color: var(--text);
   }
 
+  .queue-btn.is-find:not(:disabled):hover {
+    background: var(--gold-strong);
+  }
+
+  .queue-btn.is-cancel:not(:disabled):hover {
+    background: var(--surface-4);
+  }
+
   .slot:hover .tile-remove {
     opacity: 1;
   }
@@ -1353,6 +1439,7 @@ img.portrait {
   .random-option,
   .update button,
   .switch,
+  .queue-btn,
   .prio-item,
   .live,
   .update,

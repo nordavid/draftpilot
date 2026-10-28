@@ -66,6 +66,45 @@ impl Role {
     }
 }
 
+/// Lobby position preference (`firstPreference`/`secondPreference`): a role or Fill.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Position {
+    Top,
+    Jungle,
+    Middle,
+    Bottom,
+    Utility,
+    #[default]
+    Fill,
+}
+
+impl Position {
+    pub fn from_key(key: &str) -> Option<Position> {
+        match key {
+            "top" => Some(Position::Top),
+            "jungle" => Some(Position::Jungle),
+            "middle" => Some(Position::Middle),
+            "bottom" => Some(Position::Bottom),
+            "utility" => Some(Position::Utility),
+            "fill" => Some(Position::Fill),
+            _ => None,
+        }
+    }
+
+    /// LCU name, same values as `Role::lcu_position`.
+    pub fn lcu(self) -> &'static str {
+        match self {
+            Position::Top => "TOP",
+            Position::Jungle => "JUNGLE",
+            Position::Middle => "MIDDLE",
+            Position::Bottom => "BOTTOM",
+            Position::Utility => "UTILITY",
+            Position::Fill => "FILL",
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum Language {
@@ -117,11 +156,15 @@ impl Default for Settings {
     }
 }
 
-/// Ordered lists for one role (numeric Riot champion IDs, first choice first).
+/// Ordered lists for one role (numeric Riot champion IDs, first choice first), plus the
+/// second role "Find match" queues with when this role is the first one.
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct RolePrefs {
     pub picks: Vec<i64>,
     pub bans: Vec<i64>,
+    #[serde(default)]
+    pub second_role: Position,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]

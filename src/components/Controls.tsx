@@ -21,16 +21,18 @@ export function Switch(props: {
   )
 }
 
+/** Options with an `icon` show only the icon; `label` then becomes its aria-label. */
 export function Segmented<T extends string>(props: {
   value: T
-  options: { value: T; label: string }[]
+  options: { value: T; label: string; icon?: React.ReactNode }[]
   onChange: (v: T) => void
   label: string
   disabled?: boolean
 }): React.JSX.Element {
   const index = Math.max(0, props.options.findIndex((o) => o.value === props.value))
+  const icons = props.options.some((o) => o.icon)
   return (
-    <div className="segmented" role="radiogroup" aria-label={props.label}>
+    <div className={`segmented ${icons ? 'is-icons' : ''}`} role="radiogroup" aria-label={props.label}>
       <span
         className="seg-indicator"
         style={{
@@ -45,11 +47,12 @@ export function Segmented<T extends string>(props: {
           role="radio"
           key={o.value}
           aria-checked={props.value === o.value}
+          aria-label={o.icon ? o.label : undefined}
           disabled={props.disabled}
           className={props.value === o.value ? 'is-on' : ''}
           onClick={() => props.onChange(o.value)}
         >
-          {o.label}
+          {o.icon ?? o.label}
         </button>
       ))}
     </div>

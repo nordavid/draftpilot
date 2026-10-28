@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { GameflowPhase, Language, Role } from '@shared/index'
+import type { GameflowPhase, Language, Position, Role } from '@shared/index'
 
 // GUI texts - deliberately short. English is the default; German is optional (settings).
 // Logs (backend) are always English.
@@ -41,6 +41,22 @@ const en = {
   picksHelp: 'Next one steps in if banned, taken or not owned.',
   bans: 'Bans',
   bansHelp: 'Skips champions your team wants to play.',
+  // Find match
+  soloDuo: 'Solo/Duo',
+  secondRole: '2nd role',
+  position: {
+    top: 'Top',
+    jungle: 'Jungle',
+    middle: 'Mid',
+    bottom: 'Bot',
+    utility: 'Support',
+    fill: 'Fill'
+  } satisfies Record<Position, string>,
+  findMatch: 'Find match',
+  cancelSearch: 'Cancel',
+  queueRolesSet: 'Roles set',
+  queueLeaderOnly: 'Leader only',
+  queueFailed: 'Failed – see log',
   autoAccept: 'Auto-accept matches',
   autoPick: 'Auto-pick',
   autoBan: 'Auto-ban',
@@ -133,6 +149,21 @@ const de: Dict = {
   picksHelp: 'Der Nächste springt ein, falls gebannt, vergeben oder nicht im Besitz.',
   bans: 'Bans',
   bansHelp: 'Überspringt Champions, die dein Team spielen will.',
+  soloDuo: 'Solo/Duo',
+  secondRole: '2. Rolle',
+  position: {
+    top: 'Top',
+    jungle: 'Jungle',
+    middle: 'Mid',
+    bottom: 'Bot',
+    utility: 'Support',
+    fill: 'Fill'
+  },
+  findMatch: 'Match suchen',
+  cancelSearch: 'Abbrechen',
+  queueRolesSet: 'Rollen gesetzt',
+  queueLeaderOnly: 'Nur Leader',
+  queueFailed: 'Fehler – siehe Log',
   autoAccept: 'Matches automatisch annehmen',
   autoPick: 'Auto-Pick',
   autoBan: 'Auto-Ban',

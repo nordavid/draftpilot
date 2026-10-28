@@ -973,7 +973,7 @@ mod tests {
         fn new(session: Session) -> Harness {
             let hub = LogHub::new();
             let shared = Shared::new(hub.clone(), "test".into());
-            shared.store().roles.middle = RolePrefs { picks: vec![AHRI, SYNDRA, ORI], bans: vec![ZED, YASUO, YONE] };
+            shared.store().roles.middle = RolePrefs { picks: vec![AHRI, SYNDRA, ORI], bans: vec![ZED, YASUO, YONE], ..Default::default() };
             let fake = FakeLcu {
                 session: Arc::new(Mutex::new(session)),
                 pickable: Arc::new(Mutex::new(vec![AHRI, SYNDRA, ORI, LUX])),
@@ -1118,7 +1118,7 @@ mod tests {
         session.actions[3][0].is_in_progress = true;
         session.timer = Timer { adjusted_time_left_in_phase: 2000.0, phase: BAN_PICK.into() };
         let mut h = Harness::new(session);
-        h.shared.store().roles.none = RolePrefs { picks: vec![LUX], bans: vec![ZED] };
+        h.shared.store().roles.none = RolePrefs { picks: vec![LUX], bans: vec![ZED], ..Default::default() };
 
         h.emit().await;
         h.engine.tick().await;
@@ -1236,7 +1236,7 @@ mod tests {
     async fn random_pick_respects_role_ownership_and_team() {
         let mut h = Harness::new(draft_session());
         *h.fake.pickable.lock().unwrap() = vec![AHRI, SYNDRA, ORI, LUX, JANNA];
-        h.shared.store().roles.middle = RolePrefs { picks: vec![RANDOM_PICK], bans: vec![ORI] };
+        h.shared.store().roles.middle = RolePrefs { picks: vec![RANDOM_PICK], bans: vec![ORI], ..Default::default() };
         h.edit(|s| {
             s.my_team[1].champion_pick_intent = AHRI; // a teammate wants Ahri
             s.bans.their_team_bans = vec![SYNDRA]; // Syndra banned
@@ -1256,7 +1256,7 @@ mod tests {
     async fn random_pick_rerolls_when_taken() {
         let mut h = Harness::new(draft_session());
         *h.fake.pickable.lock().unwrap() = vec![AHRI, LUX];
-        h.shared.store().roles.middle = RolePrefs { picks: vec![RANDOM_PICK], bans: vec![] };
+        h.shared.store().roles.middle = RolePrefs { picks: vec![RANDOM_PICK], bans: vec![], ..Default::default() };
         h.emit().await;
         let first = h.own("pick").champion_id;
         assert!(first == AHRI || first == LUX);
@@ -1274,7 +1274,7 @@ mod tests {
         session.my_team[2].assigned_position = "jungle".into();
         let mut h = Harness::new(session);
         *h.fake.pickable.lock().unwrap() = vec![JANNA, LUX];
-        h.shared.store().roles.jungle = RolePrefs { picks: vec![RANDOM_PICK], bans: vec![] };
+        h.shared.store().roles.jungle = RolePrefs { picks: vec![RANDOM_PICK], bans: vec![], ..Default::default() };
         h.emit().await;
         assert_eq!(h.own("pick").champion_id, 0);
         assert_eq!(h.live().unwrap().pick.unwrap().status, ActionStatus::None);

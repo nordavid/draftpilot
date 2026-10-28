@@ -7,6 +7,7 @@ mod engine;
 mod lcu;
 mod log;
 mod model;
+mod queue;
 mod settings;
 mod state;
 

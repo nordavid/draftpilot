@@ -4,6 +4,8 @@ A small autopilot for League of Legends champ select. It runs next to the League
 talks to it through the local client API (LCU). The interface is in English, with German as
 an optional language.
 
+- **Find match:** one click on a role tab opens a Ranked Solo/Duo lobby with that role
+  first (the second role is picked per tab) and starts the queue.
 - **Accept matches:** accepts the ready check automatically.
 - **Picks per role:** first choice + fallbacks for Top, Jungle, Mid, Bot and Support. If a
   champion is banned, already taken, not owned or wanted by a teammate, the next one steps

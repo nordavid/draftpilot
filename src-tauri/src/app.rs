@@ -15,6 +15,7 @@ use crate::engine::{Engine, LiveLcu};
 use crate::lcu::{self, LcuEvent, LcuHandle, CHAMP_SELECT_SESSION_URI, GAMEFLOW_PHASE_URI};
 use crate::log::{LogHub, Logger};
 use crate::model::{ChampionCatalog, LcuStatus, LogEntry, Role, UiState, RANDOM_PICK};
+use crate::queue::{self, QueueError, QueueOutcome};
 use crate::settings;
 use crate::state::Shared;
 
@@ -33,8 +34,10 @@ struct AppCtx {
     shared: Arc<Shared>,
     champions: Arc<ChampionData>,
     engine_tx: UnboundedSender<EngineMsg>,
+    lcu: LcuHandle,
     config_path: PathBuf,
     log: Logger,
+    queue_log: Logger,
 }
 
 // --- Commands for the frontend -----------------------------------------------
@@ -74,7 +77,7 @@ fn set_settings(patch: Value, ctx: State<'_, AppCtx>) -> UiState {
 
 #[tauri::command]
 fn set_role(role: Role, prefs: Value, ctx: State<'_, AppCtx>) -> UiState {
-    let sanitized = settings::sanitize_role_prefs(&prefs);
+    let sanitized = settings::sanitize_role_prefs(&prefs, role);
     let fmt = |ids: &[i64]| -> String {
         let names: Vec<String> = ids
             .iter()
@@ -83,15 +86,33 @@ fn set_role(role: Role, prefs: Value, ctx: State<'_, AppCtx>) -> UiState {
         if names.is_empty() { "-".into() } else { names.join(", ") }
     };
     ctx.log.info(format!(
-        "Role {}: picks [{}], bans [{}]",
+        "Role {}: picks [{}], bans [{}], 2nd role {}",
         role.key(),
         fmt(&sanitized.picks),
-        fmt(&sanitized.bans)
+        fmt(&sanitized.bans),
+        sanitized.second_role.lcu()
     ));
     *ctx.shared.store().roles.get_mut(role) = sanitized;
     ctx.shared.touch_settings();
     let _ = ctx.engine_tx.send(EngineMsg::Refresh);
     ctx.shared.ui_state()
+}
+
+/// "Find match" button: Ranked Solo/Duo with `role` first and its saved second role.
+#[tauri::command]
+async fn find_match(role: Role, ctx: State<'_, AppCtx>) -> Result<QueueOutcome, QueueError> {
+    let Some(client) = ctx.lcu.get() else { return Err(QueueError::Offline) };
+    let (phase, second) = {
+        let store = ctx.shared.store();
+        (store.phase.clone(), store.roles.get(role).second_role)
+    };
+    queue::find_match(&client, phase.as_deref(), role, second, &ctx.queue_log).await
+}
+
+#[tauri::command]
+async fn cancel_search(ctx: State<'_, AppCtx>) -> Result<(), QueueError> {
+    let Some(client) = ctx.lcu.get() else { return Err(QueueError::Offline) };
+    queue::cancel_search(&client, &ctx.queue_log).await
 }
 
 /// Download the update, verify its signature and install it. On Windows the updater quits
@@ -301,6 +322,8 @@ pub fn run() {
             get_champions,
             set_settings,
             set_role,
+            find_match,
+            cancel_search,
             install_update
         ])
         .setup(|app| {
@@ -362,7 +385,7 @@ pub fn run() {
                 engine_tx.clone(),
                 hub.clone(),
             ));
-            spawn(lcu::run_connector(lcu_handle, event_tx, Logger::new(&hub, "lcu")));
+            spawn(lcu::run_connector(lcu_handle.clone(), event_tx, Logger::new(&hub, "lcu")));
             {
                 let champions = champions.clone();
                 spawn(async move { champions.refresh().await });
@@ -386,7 +409,15 @@ pub fn run() {
                 });
             }
 
-            app.manage(AppCtx { shared, champions, engine_tx, config_path, log: Logger::new(&hub, "app") });
+            app.manage(AppCtx {
+                shared,
+                champions,
+                engine_tx,
+                lcu: lcu_handle,
+                config_path,
+                log: Logger::new(&hub, "app"),
+                queue_log: Logger::new(&hub, "queue"),
+            });
             Ok(())
         })
         .build(tauri::generate_context!())

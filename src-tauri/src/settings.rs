@@ -9,8 +9,8 @@ use serde_json::{json, Value};
 
 use crate::log::Logger;
 use crate::model::{
-    Language, LockMode, RolePrefs, Settings, LOCK_THRESHOLD_MAX_MS, LOCK_THRESHOLD_MIN_MS,
-    MAX_LIST, RANDOM_PICK, ROLES,
+    Language, LockMode, Position, Role, RolePrefs, Settings, LOCK_THRESHOLD_MAX_MS,
+    LOCK_THRESHOLD_MIN_MS, MAX_LIST, RANDOM_PICK, ROLES,
 };
 use crate::state::Store;
 
@@ -65,10 +65,18 @@ fn sanitize_list(input: Option<&Value>, allow_random: bool) -> Vec<i64> {
     out
 }
 
-pub fn sanitize_role_prefs(input: &Value) -> RolePrefs {
+pub fn sanitize_role_prefs(input: &Value, role: Role) -> RolePrefs {
+    // The second role can't be the role itself (that's the first one) -> Fill.
+    let second_role = input
+        .get("secondRole")
+        .and_then(Value::as_str)
+        .and_then(Position::from_key)
+        .filter(|p| Some(p.lcu()) != role.lcu_position())
+        .unwrap_or_default();
     RolePrefs {
         picks: sanitize_list(input.get("picks"), true),
         bans: sanitize_list(input.get("bans"), false),
+        second_role,
     }
 }
 
@@ -113,7 +121,7 @@ pub fn load_into(store: &mut Store, path: &Path, log: &Logger) -> LoadOutcome {
     if let Some(roles) = data.get("roles") {
         for role in ROLES {
             if let Some(prefs) = roles.get(role.key()) {
-                *store.roles.get_mut(role) = sanitize_role_prefs(prefs);
+                *store.roles.get_mut(role) = sanitize_role_prefs(prefs, role);
             }
         }
     }
@@ -197,13 +205,26 @@ mod tests {
 
     #[test]
     fn sanitizes_lists() {
-        let p = sanitize_role_prefs(&json!({ "picks": [1, 1, -3, "x", 2, 3, 4, 5, 6, 7], "bans": null }));
+        let p = sanitize_role_prefs(
+            &json!({ "picks": [1, 1, -3, "x", 2, 3, 4, 5, 6, 7], "bans": null }),
+            Role::Middle,
+        );
         assert_eq!(p.picks, vec![1, 2, 3, 4, 5, 6]);
         assert!(p.bans.is_empty());
 
         // Random only in picks and only once.
-        let p = sanitize_role_prefs(&json!({ "picks": [-1, 5, -1], "bans": [-1, 7] }));
+        let p = sanitize_role_prefs(&json!({ "picks": [-1, 5, -1], "bans": [-1, 7] }), Role::Middle);
         assert_eq!(p.picks, vec![RANDOM_PICK, 5]);
         assert_eq!(p.bans, vec![7]);
+    }
+
+    #[test]
+    fn sanitizes_second_role() {
+        let second = |v: Value| sanitize_role_prefs(&json!({ "secondRole": v }), Role::Middle).second_role;
+        assert_eq!(second(json!("top")), Position::Top);
+        // Missing (older config.json), unknown or the role itself -> Fill.
+        assert_eq!(second(Value::Null), Position::Fill);
+        assert_eq!(second(json!("support")), Position::Fill);
+        assert_eq!(second(json!("middle")), Position::Fill);
     }
 }

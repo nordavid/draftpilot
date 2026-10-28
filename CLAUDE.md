@@ -79,12 +79,14 @@ src-tauri/src/
   lcu/           creds.rs (lockfile/process), client.rs (HTTPS), stream.rs (WAMP), mod.rs
                  (connector with reconnect, LcuHandle)
   engine.rs      pick/ban automation (core) + tests against a fake LCU
+  queue.rs       "Find match" (Solo/Duo lobby + roles + search) + tests against a fake lobby
   champions.rs   champion catalog (Data Dragon / LCU)
   settings.rs    validation + config.json
   state.rs       single source of truth (store + Notify for GUI/saving)
   model.rs       data model = JSON contract with the frontend (camelCase)
   log.rs         ring buffer + event to the GUI
-src/             React UI (App, PriorityRow, ChampionPicker, LivePanel, UpdateNotice, i18n, api)
+src/             React UI (App, PriorityRow, ChampionPicker, LivePanel, QueueBar, UpdateNotice,
+                 i18n, api)
 src/shared/index.ts  TS mirror of model.rs
 ```
 
@@ -121,6 +123,22 @@ src/shared/index.ts  TS mirror of model.rs
   hovered.
 - The engine runs as **one** task (`&mut self`) -> LCU writes are serialized automatically.
   When in doubt, do nothing.
+
+## Find match (v2.5.0)
+
+Button in the footer of each role card (`QueueBar.tsx`, Rust `queue.rs`): Ranked Solo/Duo
+(queue 420) with the tab's role as `firstPreference` and that role's `secondRole`
+(`RolePrefs.secondRole`, picked per tab, default `fill`, never the role itself).
+
+- Only from `None`/`Lobby`/`EndOfGame`. No lobby or another queue -> `POST /lol-lobby/v2/lobby`
+  `{queueId: 420}` (leader only, otherwise `not-leader`, nothing written); then
+  `PUT …/members/localMember/position-preferences`, then `POST …/matchmaking/search` and a
+  check of `…/search-state` errors (dodge timer, leaver penalty). Party member in a Solo/Duo
+  lobby -> only roles (`roles-set`), the leader queues. While `Matchmaking` the button
+  cancels (`DELETE …/matchmaking/search`).
+- A **manual action**: works while paused (the paused fade leaves the queue row visible).
+- Results/errors show for 3 s in the button itself (fixed width, no layout shift); details
+  go to the log (scope `queue`).
 
 ## Conventions
 

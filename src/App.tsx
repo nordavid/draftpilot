@@ -23,6 +23,7 @@ import { LivePanel } from './components/LivePanel'
 import { Segmented, Stepper, Switch } from './components/Controls'
 import { WindowControls } from './components/WindowControls'
 import { UpdateNotice } from './components/UpdateNotice'
+import { QueueBar } from './components/QueueBar'
 
 const TAB_KEY = 'draftpilot.tab'
 
@@ -247,6 +248,16 @@ function App({ api }: { api: DraftpilotApi }): React.JSX.Element {
                       onAdd={() => setPicker({ role: tab, kind: 'ban' })}
                     />
                   </div>
+
+                  <QueueBar
+                    role={tab}
+                    second={prefs.secondRole}
+                    phase={ui.phase}
+                    connected={connected}
+                    onSecond={(secondRole) => setRole(tab, { ...prefs, secondRole })}
+                    findMatch={api.findMatch}
+                    cancelSearch={api.cancelSearch}
+                  />
                 </div>
               </section>
 

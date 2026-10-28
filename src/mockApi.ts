@@ -1,7 +1,15 @@
-import type { ChampionCatalog, DraftpilotApi, LogEntry, UiState } from '@shared/index'
+import {
+  QUEUE_IDLE_PHASES,
+  type ChampionCatalog,
+  type DraftpilotApi,
+  type LogEntry,
+  type QueueError,
+  type UiState
+} from '@shared/index'
 
 // Sample data for the GUI in a plain browser (no Tauri, no League client).
-// URL parameters: ?live=0 (no champ select), ?paused=1, ?lang=de, ?update=2.3.0
+// URL parameters: ?live=0 (no champ select), ?paused=1, ?lang=de, ?update=2.3.0,
+// ?queue=roles-set|not-leader|failed (outcome of "Find match", default: queue starts)
 
 const params = new URLSearchParams(location.search)
 const now = Date.now()
@@ -21,12 +29,12 @@ let state: UiState = {
     lockThresholdMs: 3000
   },
   roles: {
-    top: { picks: [], bans: [] },
-    jungle: { picks: [64, 254, -1], bans: [] },
-    middle: { picks: [103, 134, 61, 7], bans: [238, 157] },
-    bottom: { picks: [], bans: [] },
-    utility: { picks: [], bans: [] },
-    none: { picks: [], bans: [] }
+    top: { picks: [], bans: [], secondRole: 'fill' },
+    jungle: { picks: [64, 254, -1], bans: [], secondRole: 'fill' },
+    middle: { picks: [103, 134, 61, 7], bans: [238, 157], secondRole: 'top' },
+    bottom: { picks: [], bans: [], secondRole: 'fill' },
+    utility: { picks: [], bans: [], secondRole: 'fill' },
+    none: { picks: [], bans: [], secondRole: 'fill' }
   },
   live:
     params.get('live') === '0'
@@ -77,6 +85,21 @@ export const mockApi: DraftpilotApi = {
   setRole: async (role, prefs) => {
     state = { ...state, roles: { ...state.roles, [role]: prefs } }
     return emit()
+  },
+  findMatch: async () => {
+    await new Promise((r) => setTimeout(r, 400))
+    const outcome = params.get('queue')
+    if (!state.phase || !QUEUE_IDLE_PHASES.includes(state.phase)) throw 'busy' satisfies QueueError
+    if (outcome === 'not-leader' || outcome === 'failed') throw outcome satisfies QueueError
+    if (outcome === 'roles-set') return 'roles-set'
+    state = { ...state, phase: 'Matchmaking' }
+    emit()
+    return 'searching'
+  },
+  cancelSearch: async () => {
+    await new Promise((r) => setTimeout(r, 200))
+    state = { ...state, phase: 'Lobby' }
+    emit()
   },
   installUpdate: async () => {
     await new Promise((r) => setTimeout(r, 1500))

@@ -46,10 +46,15 @@ export const MAX_LIST = 6
 /** Placeholder in a pick list: a random owned champion that fits the role. */
 export const RANDOM_PICK = -1
 
+/** Lobby position preference: a role or Fill. */
+export type Position = Exclude<Role, 'none'> | 'fill'
+
 /** Ordered lists for one role (numeric Riot champion IDs, first choice first). */
 export interface RolePrefs {
   picks: number[]
   bans: number[]
+  /** Second role "Find match" queues with (the first one is this role). */
+  secondRole: Position
 }
 
 export type RolePrefsMap = Record<Role, RolePrefs>
@@ -137,6 +142,15 @@ export interface UiState {
   update: string | null
 }
 
+/** Result of "Find match": queue started, or roles set in someone else's party lobby. */
+export type QueueOutcome = 'searching' | 'roles-set'
+
+/** Why "Find match" didn't work (details in the log). Rust: src-tauri/src/queue.rs */
+export type QueueError = 'offline' | 'busy' | 'not-leader' | 'failed'
+
+/** Phases from which "Find match" can open a lobby: home, lobby, post game. */
+export const QUEUE_IDLE_PHASES: readonly GameflowPhase[] = ['None', 'Lobby', 'EndOfGame']
+
 /** Backend interface for the GUI (Tauri commands + events, see src/api.ts). */
 export interface DraftpilotApi {
   getState(): Promise<UiState>
@@ -144,6 +158,9 @@ export interface DraftpilotApi {
   getChampions(): Promise<ChampionCatalog>
   setSettings(partial: Partial<Settings>): Promise<UiState>
   setRole(role: Role, prefs: RolePrefs): Promise<UiState>
+  /** Ranked Solo/Duo with `role` first and its second role; rejects with a QueueError. */
+  findMatch(role: Role): Promise<QueueOutcome>
+  cancelSearch(): Promise<void>
   /** Downloads + installs the update; the app quits and restarts in the process. */
   installUpdate(): Promise<void>
   onState(cb: (state: UiState) => void): () => void
